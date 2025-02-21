@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-dev
+    environment:
+      POSTGRES_USER: username
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: aicldb
+      POSTGRES_MULTIPLE_DATABASES: "keycloak:keycloak_user:keycloak_password"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.data/postgres:/var/lib/postgresql/data
+      - ./setups/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U username -d aicldb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0
+    container_name: keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak_user
+      KC_DB_PASSWORD: keycloak_password
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: true
+    volumes:
+      - ./setups/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/opt/keycloak/bin/kc.sh"]
+    command: ["start-dev", "--import-realm"]
+    healthcheck:
+      test: ['CMD-SHELL', '[ -f /tmp/HealthCheck.java ] || echo "public class HealthCheck { public static void main(String[] args) throws java.lang.Throwable { System.exit(java.net.HttpURLConnection.HTTP_OK == ((java.net.HttpURLConnection)new java.net.URL(args[0]).openConnection()).getResponseCode() ? 0 : 1); } }" > /tmp/HealthCheck.java && java /tmp/HealthCheck.java http://localhost:8080/health/live']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  vault:
+    image: hashicorp/vault:1.18
+    container_name: vault
+    ports:
+      - "8300:8300"
+    cap_add:
+      - IPC_LOCK
+    entrypoint: vault server -dev -dev-root-token-id="root" -dev-listen-address="0.0.0.0:8300"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+
+  terraform:
+    build:
+      context: ./setups/terraform
+      dockerfile: Dockerfile
+    container_name: terraform
+    depends_on:
+      - vault
+    environment:
+      - TF_VAR_vault_addr=http://vault:8300
+      - TF_VAR_vault_token=root
+      - TF_IN_AUTOMATION=true
+
+
+volumes:
+  postgres-data:
+    driver: local

@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = "0.8.1"
 tokio = { version = "1.43.0", features = ["full"] }
 vaultrs = "0.7.3"
+axum = { version = "0.8", features = [ "macros" ]}
+axum-oidc = "0.6.0"
+tower = "0.5"
+tower-sessions = "0.14"
+
+dotenvy = "0.15"

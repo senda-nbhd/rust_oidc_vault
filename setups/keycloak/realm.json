@@ -1,0 +1,97 @@
+{
+  "realm": "test",
+  "displayName": "Vault Authentication",
+  "enabled": true,
+  "sslRequired": "external",
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "clients": [
+    {
+      "clientId": "vault-client",
+      "name": "Vault Client",
+      "secret": "your-client-secret",
+      "redirectUris": [
+        "http://localhost:8300/oidc/callback",
+        "http://localhost:8300/ui/vault/auth/oidc/oidc/callback"
+      ],
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "defaultClientScopes": [
+        "web-origins",
+        "roles",
+        "profile",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access"
+      ],
+      "attributes": {
+        "access.token.lifespan": "300",
+        "id.token.as.detached.signature": "false",
+        "saml.assertion.signature": "false",
+        "saml.force.post.binding": "false",
+        "saml.multivalued.roles": "false",
+        "saml.encrypt": "false",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.revoke.offline.tokens": "false",
+        "use.refresh.tokens": "true"
+      }
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "vault-admin",
+        "description": "Vault Administrator Role"
+      },
+      {
+        "name": "vault-user",
+        "description": "Regular Vault User"
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "admin.user",
+      "firstName": "Admin",
+      "lastName": "User",
+      "email": "admin@example.com",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "adminpass123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["vault-admin"]
+    },
+    {
+      "username": "regular.user",
+      "firstName": "Regular",
+      "lastName": "User",
+      "email": "user@example.com",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "userpass123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["vault-user"]
+    }
+  ]
+}
