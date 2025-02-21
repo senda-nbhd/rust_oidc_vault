@@ -48,36 +48,23 @@ resource "vault_identity_oidc_provider" "test" {
   allowed_client_ids = [
     vault_identity_oidc_client.test.client_id
   ]
-  scopes_supported = [
-    vault_identity_oidc_scope.test.name
-  ]
 }
 
 # Create client
-resource "vault_identity_oidc_client" "app" {
-  name             = "third-party-app"
-  redirect_uris    = ["http://third-party-app:3000/callback"]
-  id_token_ttl     = 86400    # 24 hours in seconds
-  access_token_ttl = 86400    # 24 hours in seconds
-  client_type      = "confidential"
+resource "vault_identity_oidc_client" "test" {
+  name          = "test-aicl"
+  redirect_uris = [
+    "http://localhost:8080/realms/test/protocol/openid-connect/auth",
+  ]
+  id_token_ttl     = 2400
+  access_token_ttl = 7200
 }
 
 # Create role
 resource "vault_identity_oidc_role" "role" {
   name      = "third-party-app-role"
   key       = vault_identity_oidc_key.key.name
-  client_id = vault_identity_oidc_client.app.client_id
-  template  = jsonencode({
-    username = "{{ identity.entity.name }}"
-    email    = "{{ identity.entity.metadata.email }}"
-  })
-}
-
-# Create assignment
-resource "vault_identity_oidc_assignment" "allow_all" {
-  name              = "allow_all"
-  entity_ids        = ["*"]
-  group_ids         = ["*"]
+  client_id = vault_identity_oidc_client.test.client_id
 }
 
 # Policy for OIDC operations
