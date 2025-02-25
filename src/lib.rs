@@ -2,9 +2,12 @@ use axum::{
     error_handling::HandleErrorLayer, http::Uri, response::IntoResponse, routing::get, Router,
 };
 use axum_oidc::{
-    error::MiddlewareError, EmptyAdditionalClaims, OidcAuthLayer, OidcClaims, OidcLoginLayer,
+    error::MiddlewareError, OidcAuthLayer, OidcClaims, OidcLoginLayer,
     OidcRpInitiatedLogout,
 };
+use ident::AiclClaims;
+use openidconnect::RequestTokenError;
+use serde_json::Value;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -12,6 +15,8 @@ use tower_sessions::{
     cookie::{time::Duration, SameSite},
     Expiry, MemoryStore, SessionManagerLayer,
 };
+
+mod ident;
 
 pub async fn run(
     app_url: String,
@@ -27,16 +32,36 @@ pub async fn run(
 
     let oidc_login_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|e: MiddlewareError| async {
+            match &e {
+                MiddlewareError::RequestToken(RequestTokenError::Parse(error, payload)) => {
+                    tracing::error!("Failed to parse request token: {:?}", error);
+                    let payload_str: Value = serde_json::from_slice(&payload).unwrap();
+                    tracing::error!("Request token payload: {}", serde_json::to_string_pretty(&payload_str).unwrap());
+                },
+                err => {
+                    tracing::error!("Unhandled error: {:?}", err);
+                }
+            }
             e.into_response()
         }))
-        .layer(OidcLoginLayer::<EmptyAdditionalClaims>::new());
+        .layer(OidcLoginLayer::<AiclClaims>::new());
 
     let oidc_auth_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|e: MiddlewareError| async {
+            match &e {
+                MiddlewareError::RequestToken(RequestTokenError::Parse(error, payload)) => {
+                    tracing::error!("Failed to parse request token: {:?}", error);
+                    let payload_str: Value = serde_json::from_slice(&payload).unwrap();
+                    tracing::error!("Request token payload: {}", serde_json::to_string_pretty(&payload_str).unwrap());
+                },
+                err => {
+                    tracing::error!("Unhandled error: {:?}", err);
+                }
+            }
             e.into_response()
         }))
         .layer(
-            OidcAuthLayer::<EmptyAdditionalClaims>::discover_client(
+            OidcAuthLayer::<AiclClaims>::discover_client(
                 Uri::from_maybe_shared(app_url.clone()).expect("valid APP_URL"),
                 issuer,
                 client_id,
@@ -62,24 +87,23 @@ pub async fn run(
         .unwrap();
 }
 
-async fn authenticated(claims: OidcClaims<EmptyAdditionalClaims>) -> impl IntoResponse {
-    format!("Hello {}", claims.subject().as_str())
+async fn authenticated(claims: OidcClaims<AiclClaims>) -> impl IntoResponse {
+    format!("Hello {}, {}", claims.subject().as_str(), serde_json::to_string_pretty(&claims.additional_claims()).unwrap())
 }
 
 #[axum::debug_handler]
 async fn maybe_authenticated(
-    claims: Result<OidcClaims<EmptyAdditionalClaims>, axum_oidc::error::ExtractorError>,
+    claims: Result<OidcClaims<AiclClaims>, axum_oidc::error::ExtractorError>,
 ) -> impl IntoResponse {
-    if let Ok(claims) = claims {
-        format!(
-            "Hello {}! You are already logged in from another Handler.",
-            claims.subject().as_str()
-        )
-    } else {
-        "Hello anon!".to_string()
+    match claims.map(|claims| (claims.additional_claims().to_identity(), claims)) {
+        Ok((Some(identity), _)) => format!("Hello {}! You are already logged in.", identity.name),
+        Ok((None, claims)) => {
+            format!("Hello {}! You are already logged in, but your identity is misconfigured", claims.subject().as_str())
+        }
+        Err(_) => "Hello anon!".to_string(),
     }
 }
 
 async fn logout(logout: OidcRpInitiatedLogout) -> impl IntoResponse {
-    logout.with_post_logout_redirect(Uri::from_static("https://pfzetto.de"))
+    logout.with_post_logout_redirect(Uri::from_static("/"))
 }

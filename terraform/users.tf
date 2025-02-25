@@ -1,72 +1,108 @@
-#------------------------------------------------------------------------------#
-# Keycloak Users
-#------------------------------------------------------------------------------#
+# Example usage of the modules
 
-resource "keycloak_user" "user_alice" {
-  realm_id   = keycloak_realm.realm.id
-  username   = "alice"
-  enabled    = true
+module "identity" {
+  source = "./modules/identity"
+  
+  realm_id      = keycloak_realm.realm.id
+  app_client_id = keycloak_openid_client.app_client.id
 
-  email      = "alice@domain.com"
-  first_name = "Alice"
-  last_name  = "Aliceberg"
-
-  initial_password {
-    value     = "alice"
-    temporary = false
-  }
-}
-
-resource "keycloak_user" "user_bob" {
-  realm_id   = keycloak_realm.realm.id
-  username   = "bob"
-  enabled    = true
-
-  email      = "bob@domain.com"
-  first_name = "Bob"
-  last_name  = "Bobsen"
-
-  initial_password {
-    value     = "bob"
-    temporary = false
-  }
-}
-
-# Assign Vault roles to users
-resource "keycloak_user_roles" "alice_vault_roles" {
-  realm_id = keycloak_realm.realm.id
-  user_id  = keycloak_user.user_alice.id
-
-  role_ids = [
-    keycloak_role.vault_reader_role.id
+  regions = [
+    {
+      name        = "Singapore"
+      description = "Located in Southeast Asia"
+      code       = "SG"
+    }
+  ]
+  
+  teams = [
+    {
+      id          = "team-engineering-123"
+      name        = "Engineering"
+      description = "Engineering team responsible for development"
+      region      = "Singapore"
+    },
+    {
+      id          = "team-research-456"
+      name        = "Research"
+      description = "Research team responsible for innovation"
+      region      = "Singapore"
+    },
+    {
+      id          = "team-academic-789"
+      name        = "Academic"
+      description = "Academic partners and collaborators"
+      region      = "Singapore"
+    }
+  ]
+  
+  # Optional: Override default roles if needed
+  roles = [
+    {
+      name        = "ADMIN"
+      description = "Administrator role with full access"
+    },
+    {
+      name        = "USER"
+      description = "Standard user role with limited access"
+    },
+    {
+      name        = "SPECTATOR"
+      description = "Read-only role for viewing data"
+    },
+    {
+      name        = "ACADEMIC_ADVISOR"
+      description = "Role for academic advisors with specialized permissions"
+    }
   ]
 }
 
-resource "keycloak_user_roles" "bob_vault_roles" {
+module "users" {
+  source = "./modules/users"
+  
   realm_id = keycloak_realm.realm.id
-  user_id  = keycloak_user.user_bob.id
-
-  role_ids = [
-    keycloak_role.vault_management_role.id
-  ]
-}
-
-# Assign app roles to users
-resource "keycloak_user_roles" "alice_app_roles" {
-  realm_id = keycloak_realm.realm.id
-  user_id  = keycloak_user.user_alice.id
-
-  role_ids = [
-    keycloak_role.app_reader_role.id
-  ]
-}
-
-resource "keycloak_user_roles" "bob_app_roles" {
-  realm_id = keycloak_realm.realm.id
-  user_id  = keycloak_user.user_bob.id
-
-  role_ids = [
-    keycloak_role.app_admin_role.id,
-    keycloak_role.app_reader_role.id
+  roles    = module.identity.roles
+  groups   = module.identity.groups
+  
+  users = [
+    {
+      username   = "alice"
+      email      = "alice@domain.com"
+      first_name = "Alice"
+      last_name  = "Aliceberg"
+      id         = "550e8400-e29b-41d4-a716-446655440000"
+      password   = "alice"
+      roles      = ["ADMIN", "USER"]
+      team       = "Engineering"
+    },
+    {
+      username   = "bob"
+      email      = "bob@domain.com"
+      first_name = "Bob"
+      last_name  = "Bobsen"
+      id         = "660e8400-e29b-41d4-a716-446655440001"
+      password   = "bob"
+      roles      = ["USER"]
+      team       = "Engineering"
+    },
+    {
+      username   = "carol"
+      email      = "carol@university.edu"
+      first_name = "Carol"
+      last_name  = "Caroline"
+      id         = "770e8400-e29b-41d4-a716-446655440002"
+      password   = "carol"
+      roles      = ["ACADEMIC_ADVISOR"]
+      team       = "Academic"
+    },
+    {
+      username   = "dave"
+      email      = "dave@domain.com"
+      first_name = "Dave"
+      last_name  = "Davison"
+      id         = "880e8400-e29b-41d4-a716-446655440003"
+      password   = "dave"
+      roles      = ["SPECTATOR"]
+      team       = "Research"
+    }
   ]
 }
