@@ -7,6 +7,7 @@ use axum_oidc::{
 };
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
+use tower_http::trace::TraceLayer;
 use tower_sessions::{
     cookie::{time::Duration, SameSite},
     Expiry, MemoryStore, SessionManagerLayer,
@@ -36,7 +37,7 @@ pub async fn run(
         }))
         .layer(
             OidcAuthLayer::<EmptyAdditionalClaims>::discover_client(
-                Uri::from_maybe_shared(app_url).expect("valid APP_URL"),
+                Uri::from_maybe_shared(app_url.clone()).expect("valid APP_URL"),
                 issuer,
                 client_id,
                 client_secret,
@@ -52,9 +53,10 @@ pub async fn run(
         .layer(oidc_login_service)
         .route("/bar", get(maybe_authenticated))
         .layer(oidc_auth_service)
-        .layer(session_layer);
+        .layer(session_layer)
+        .layer(TraceLayer::new_for_http());
 
-    let listener = TcpListener::bind("[::]:8080").await.unwrap();
+    let listener = TcpListener::bind("0.0.0.0:4040").await.unwrap();
     axum::serve(listener, app.into_make_service())
         .await
         .unwrap();

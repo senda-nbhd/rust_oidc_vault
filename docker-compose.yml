@@ -28,48 +28,44 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: keycloak_user
       KC_DB_PASSWORD: keycloak_password
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_ADMIN: root
+      KEYCLOAK_ADMIN_PASSWORD: root
       KC_HEALTH_ENABLED: true
-    volumes:
-      - ./setups/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
-    entrypoint: ["/opt/keycloak/bin/kc.sh"]
-    command: ["start-dev", "--import-realm"]
+    command: "start-dev"
     healthcheck:
       test: ['CMD-SHELL', '[ -f /tmp/HealthCheck.java ] || echo "public class HealthCheck { public static void main(String[] args) throws java.lang.Throwable { System.exit(java.net.HttpURLConnection.HTTP_OK == ((java.net.HttpURLConnection)new java.net.URL(args[0]).openConnection()).getResponseCode() ? 0 : 1); } }" > /tmp/HealthCheck.java && java /tmp/HealthCheck.java http://localhost:8080/health/live']
       interval: 5s
       timeout: 5s
       retries: 30
+    
 
   vault:
     image: hashicorp/vault:1.18
     container_name: vault
     ports:
-      - "8300:8300"
+      - "8200:8200"
+      - "8250:8250"
     cap_add:
       - IPC_LOCK
-    entrypoint: vault server -dev -dev-root-token-id="root" -dev-listen-address="0.0.0.0:8300"
+    entrypoint: vault server -dev -dev-root-token-id="myroot" -dev-listen-address="0.0.0.0:8200"
     depends_on:
       keycloak:
         condition: service_healthy
 
+   
   terraform:
     build:
-      context: ./setups/terraform
+      context: ./terraform
       dockerfile: Dockerfile
     container_name: terraform
     depends_on:
+      - keycloak
       - vault
-    environment:
-      - TF_VAR_vault_addr=http://vault:8300
-      - TF_VAR_vault_token=root
-      - TF_IN_AUTOMATION=true
-
 
 volumes:
   postgres-data:

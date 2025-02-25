@@ -2,7 +2,7 @@
 set -e
 
 echo "Waiting for Vault to be ready..."
-sleep 5
+sleep 3
 
 echo "Vault is ready - initializing Terraform"
 terraform init

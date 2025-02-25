@@ -5,8 +5,7 @@ WORKDIR /terraform
 # Install curl for healthcheck
 RUN apk add --no-cache curl
 
-COPY main.tf .
-COPY entrypoint.sh .
+COPY . .
 
 RUN chmod +x entrypoint.sh
 
