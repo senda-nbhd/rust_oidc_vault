@@ -5,9 +5,8 @@ resource "keycloak_group" "institutions_parent" {
   name      = "Institutions"
 }
 
-# Create team groups as subgroups of regions
 resource "keycloak_group" "institutions" {
-  for_each = { for team in var.institutions : team.name => team }
+  for_each = { for inst in var.institutions : inst.name => inst }
   
   realm_id  = var.realm_id
   name      = each.key

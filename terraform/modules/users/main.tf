@@ -4,7 +4,7 @@ terraform {
   required_providers {
     keycloak = {
       source  = "mrparkers/keycloak"
-      version = ">= 3.0.0"
+      version = "4.4.0"
     }
   }
 }
@@ -41,26 +41,45 @@ resource "keycloak_user_roles" "user_roles" {
   ]
 }
 
-# Assign users to their teams (groups)
-resource "keycloak_user_groups" "team_groups" {
-  for_each = {
-    for user in var.users : user.username => user
-    if user.team != null
-  }
+# Create a map of users by team
+locals {
+  # Collect all group memberships in a flat structure
+  all_user_group_memberships = concat(
+    # Team memberships
+    [for user in var.users : 
+      {
+        username = user.username
+        group_name = user.team
+      } if user.team != null
+    ],
+    # Institution memberships
+    [for user in var.users : 
+      {
+        username = user.username
+        group_name = user.institution
+      } if user.institution != null
+    ]
+  )
   
-  realm_id  = var.realm_id
-  user_id   = keycloak_user.users[each.key].id
-  group_ids = [lookup(var.groups, each.value.team, "")]
+  # Group by group_name for keycloak_group_memberships resource
+  memberships_by_group = {
+    for group_name, items in {
+      for membership in local.all_user_group_memberships : 
+      membership.group_name => membership...
+    } : group_name => items
+  }
 }
 
-# Assign users to their institution groups
-resource "keycloak_user_groups" "institution_groups" {
-  for_each = {
-    for user in var.users : "${user.username}-inst" => user
-    if user.institution != null
-  }
+# Single resource for all group memberships
+resource "keycloak_group_memberships" "all_memberships" {
+  for_each = local.memberships_by_group
   
-  realm_id  = var.realm_id
-  user_id   = keycloak_user.users[trimsuffix(each.key, "-inst")].id
-  group_ids = [lookup(var.groups, each.value.institution, "")]
+  realm_id = var.realm_id
+  group_id = lookup(var.groups, each.key, "")
+  
+  members = [
+    for item in each.value : item.username
+  ]
+
+  depends_on = [keycloak_user.users]
 }

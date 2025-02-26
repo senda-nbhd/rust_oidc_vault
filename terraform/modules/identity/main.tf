@@ -5,7 +5,7 @@ terraform {
   required_providers {
     keycloak = {
       source  = "mrparkers/keycloak"
-      version = ">= 3.0.0"
+      version = "4.4.0"
     }
   }
 }
@@ -16,5 +16,8 @@ locals {
   roles_map = { for role in keycloak_role.app_roles : role.name => role.id }
   
   # Create a map of groups for easier access
-  groups_map = { for group in keycloak_group.teams : group.name => group.id }
+  groups_map = merge(
+    { for group in keycloak_group.teams : group.name => group.id },
+    { for group in keycloak_group.institutions : group.name => group.id }
+  )
 }

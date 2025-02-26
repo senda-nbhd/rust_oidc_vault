@@ -4,11 +4,11 @@ terraform {
   required_providers {
     vault = {
       source = "hashicorp/vault"
-      version = ">= 3.0.0"
+      version = "4.6.0"
     }
     keycloak = {
       source  = "mrparkers/keycloak"
-      version = ">= 3.0.0"
+      version = "4.4.0"
     }
   }
 }

@@ -8,7 +8,6 @@ module "identity" {
 
   # Define teams extracted from SQL fixtures
   institutions = [
-    # Teams from team_setup.sql
     {
       name        = "School1"
       description = "School for authentication testing"
@@ -21,7 +20,6 @@ module "identity" {
   
   # Define teams extracted from SQL fixtures
   teams = [
-    # Teams from team_setup.sql
     {
       name        = "Team1"
       description = "Team for authentication testing"
@@ -38,7 +36,6 @@ module "identity" {
   
   # Roles extracted from SQL fixtures
   roles = [
-    # From team_setup.sql
     {
       name        = "CAPTAIN"
       description = "Team captain with administrative privileges"
@@ -51,7 +48,6 @@ module "identity" {
       name        = "SPECTATOR"
       description = "Read-only access to team resources"
     },
-    # From admin_setup.sql
     {
       name        = "ROOT"
       description = "System administrator with full access"

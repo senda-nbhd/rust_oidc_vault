@@ -21,7 +21,7 @@ services:
       retries: 5
 
   keycloak:
-    image: quay.io/keycloak/keycloak:22.0
+    image: keycloak/keycloak:26.1
     container_name: keycloak
     environment:
       KC_DB: postgres
@@ -36,13 +36,21 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: "start-dev"
-    healthcheck:
-      test: ['CMD-SHELL', '[ -f /tmp/HealthCheck.java ] || echo "public class HealthCheck { public static void main(String[] args) throws java.lang.Throwable { System.exit(java.net.HttpURLConnection.HTTP_OK == ((java.net.HttpURLConnection)new java.net.URL(args[0]).openConnection()).getResponseCode() ? 0 : 1); } }" > /tmp/HealthCheck.java && java /tmp/HealthCheck.java http://localhost:8080/health/live']
-      interval: 5s
-      timeout: 5s
-      retries: 30
-    
+    command: ["start-dev"]
+
+  wait-for-keycloak:
+    image: curlimages/curl:latest
+    depends_on:
+      - keycloak
+    command: >
+      sh -c "
+        until curl -s --fail http://keycloak:8080/realms/master || curl -s --fail http://keycloak:8080/auth/realms/master;
+        do
+          echo 'Waiting for Keycloak to be fully initialized...';
+          sleep 5;
+        done;
+        echo 'Keycloak is up and running!'
+      "
 
   vault:
     image: hashicorp/vault:1.18
@@ -54,9 +62,8 @@ services:
       - IPC_LOCK
     entrypoint: vault server -dev -dev-root-token-id="myroot" -dev-listen-address="0.0.0.0:8200"
     depends_on:
-      keycloak:
-        condition: service_healthy
-
+      wait-for-keycloak:
+        condition: service_completed_successfully
    
   terraform:
     build:

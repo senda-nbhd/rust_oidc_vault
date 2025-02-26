@@ -4,7 +4,7 @@ output "roles" {
 }
 
 output "groups" {
-  description = "Map of group names to group IDs"
+  description = "Map of team names to group IDs"
   value       = local.groups_map
 }
 
