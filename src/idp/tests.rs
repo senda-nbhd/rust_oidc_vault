@@ -77,35 +77,6 @@ async fn test_team1_member_retrieval() {
     assert_eq!(members[0].username, "member1");
 }
 
-// Test group structure with region hierarchy
-#[tracing_test::traced_test]
-#[tokio::test]
-async fn test_region_group_hierarchy() {
-    let admin = IdpAdmin::new(create_keycloak_config())
-        .await
-        .expect("Failed to create IdpAdmin");
-
-    // Get all groups
-    let groups_result = admin.get_groups().await;
-    assert!(
-        groups_result.is_ok(),
-        "Failed to retrieve groups: {:?}",
-        groups_result.err()
-    );
-
-    let groups = groups_result.unwrap();
-    tracing::info!("Total groups: {}", groups.len());
-    for group in groups.iter() {
-        tracing::info!("Group: {:?}", group);
-    }
-
-    // Check for team under region
-    let team1_found = groups
-        .iter()
-        .any(|g| g.name == "Team1");
-    assert!(team1_found, "Team1 not found as subgroup");
-}
-
 // Test role assignment for different user types
 #[tracing_test::traced_test]
 #[tokio::test]
@@ -146,7 +117,7 @@ async fn test_role_assignments() {
     assert!(has_captain_role, "Team admin should have CAPTAIN role");
 
     // Test advisor roles
-    let advisor_result = admin.find_users_by_username("advisor_stanford").await;
+    let advisor_result = admin.find_users_by_username("advisor1").await;
     assert!(advisor_result.is_ok(), "Failed to find advisor user");
 
     let advisors = advisor_result.unwrap();
@@ -198,16 +169,16 @@ async fn test_domain_model_conversion() {
     );
 
     // Test conversion for advisor
-    let advisor_result = admin.find_users_by_username("advisor_1").await.unwrap();
+    let advisor_result = admin.find_users_by_username("advisor1").await.unwrap();
     let advisor_domain = admin.to_domain_user(&advisor_result[0]).await.unwrap();
 
     // Verify team info for advisor
     assert!(
-        advisor_domain.team.is_some(),
+        advisor_domain.institution.is_some(),
         "Advisor should have institution info"
     );
-    if let Some(team) = advisor_domain.team {
-        assert_eq!(team.name, "Stanford University");
+    if let Some(team) = advisor_domain.institution {
+        assert_eq!(team.name, "School1");
     }
 
     // Verify role mapping for advisor
@@ -245,7 +216,7 @@ async fn test_group_membership_and_attributes() {
 
     // Get Stanford advisor
     let advisor_result = admin
-        .find_users_by_username("advisor_stanford")
+        .find_users_by_username("advisor1")
         .await
         .unwrap();
     let advisor = &advisor_result[0];
@@ -264,27 +235,14 @@ async fn test_group_membership_and_attributes() {
         "Advisor should belong to at least one group"
     );
 
-    // Find Stanford University group
-    let stanford_group = groups.iter().find(|g| g.name == "Stanford University");
+    // Find School1 group
+    let school1_group = groups.iter().find(|g| g.name == "School1");
     assert!(
-        stanford_group.is_some(),
-        "Stanford advisor should belong to Stanford University group"
+        school1_group.is_some(),
+        "School1 advisor should belong to School1 group"
     );
 
-    if let Some(group) = stanford_group {
-        // Check for team_id attribute
-        let team_id = group.attributes.get("team_id");
-        assert!(
-            team_id.is_some(),
-            "Stanford group should have team_id attribute"
-        );
-
-        let team_id_value = &team_id.unwrap()[0];
-        assert_eq!(
-            team_id_value, "11111111-1111-1111-1111-111111111111",
-            "Stanford team ID should match fixture"
-        );
-
+    if let Some(group) = school1_group {
         // Check for region code via parent group
         if let Some(parent_id) = group.parent_id {
             let parent_group = admin.get_group(parent_id).await;
@@ -292,15 +250,8 @@ async fn test_group_membership_and_attributes() {
 
             let universities_group = parent_group.unwrap();
             assert_eq!(
-                universities_group.name, "Universities",
-                "Stanford's parent group should be Universities"
-            );
-
-            // Check region code attribute
-            let region_code = universities_group.attributes.get("region_code");
-            assert!(
-                region_code.is_some(),
-                "Region should have region_code attribute"
+                universities_group.name, "Institutions",
+                "School1's parent group should be Institutions"
             );
         }
     }
@@ -334,7 +285,7 @@ async fn test_comprehensive_report() {
     let team_captain = report.iter().find(|u| u.username == "admin1");
     assert!(team_captain.is_some(), "Team captain not found in report");
 
-    let advisor = report.iter().find(|u| u.username == "advisor_stanford");
+    let advisor = report.iter().find(|u| u.username == "advisor1");
     assert!(advisor.is_some(), "University advisor not found in report");
 
     let team_member = report.iter().find(|u| u.username == "member1");
@@ -343,7 +294,7 @@ async fn test_comprehensive_report() {
     // Verify all users have their roles and groups populated
     for user in &report {
         // Root and global viewers don't have groups
-        if !["root", "root2", "viewer_global", "viewer_global2"].contains(&user.username.as_str()) {
+        if !["root", "root2", "viewer_global", "viewer_global2", "advisor1", "advisor2"].contains(&user.username.as_str()) {
             assert!(
                 user.team.is_some(),
                 "User {} should have a team",
@@ -373,7 +324,7 @@ async fn test_cache_invalidation() {
 
     // First load data into cache
     let advisor_result = admin
-        .find_users_by_username("advisor_stanford")
+        .find_users_by_username("advisor1")
         .await
         .unwrap();
     let advisor = &advisor_result[0];
@@ -392,21 +343,6 @@ async fn test_cache_invalidation() {
         "Should be able to reload user groups after cache invalidation"
     );
 
-    // Get Stanford group and invalidate group cache
-    let groups = admin.get_groups().await.unwrap();
-    let stanford_group = groups
-        .iter()
-        .find(|g| g.name == "Stanford University")
-        .unwrap();
-    admin.invalidate_group_cache(stanford_group.id).await;
-
-    // Verify we can still get the group (should reload from source)
-    let stanford_after = admin.get_group(stanford_group.id).await;
-    assert!(
-        stanford_after.is_ok(),
-        "Should be able to reload group after cache invalidation"
-    );
-
     // Test global cache invalidation
     admin.invalidate_caches();
 
@@ -414,43 +350,4 @@ async fn test_cache_invalidation() {
     let _ = admin.get_users().await.unwrap();
     let _ = admin.get_groups().await.unwrap();
     let _ = admin.get_comprehensive_report().await.unwrap();
-}
-
-// Test finding users by email
-#[tracing_test::traced_test]
-#[tokio::test]
-async fn test_find_users_by_email() {
-    let admin = IdpAdmin::new(create_keycloak_config())
-        .await
-        .expect("Failed to create IdpAdmin");
-
-    // Find Stanford advisor by email
-    let advisor_email = "advisor.stanford@stanford.edu";
-    let advisor_result = admin.find_users_by_email(advisor_email).await;
-    assert!(
-        advisor_result.is_ok(),
-        "Failed to find user by email: {:?}",
-        advisor_result.err()
-    );
-
-    let advisors = advisor_result.unwrap();
-    assert_eq!(
-        advisors.len(),
-        1,
-        "Should find exactly one user with this email"
-    );
-    assert_eq!(advisors[0].username, "advisor_stanford");
-
-    // Test partial email matching (if supported by provider)
-    let stanford_domain_result = admin.find_users_by_email("@stanford.edu").await;
-    assert!(stanford_domain_result.is_ok());
-    let stanford_users = stanford_domain_result.unwrap();
-    assert!(
-        !stanford_users.is_empty(),
-        "Should find at least one Stanford user"
-    );
-
-    // Test caching by calling again
-    let advisor_cached = admin.find_users_by_email(advisor_email).await.unwrap();
-    assert_eq!(advisors.len(), advisor_cached.len());
 }

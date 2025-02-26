@@ -1,4 +1,4 @@
-use super::ext::{IdentityProvider, IdpConfig, IdpError, IdpGroup, IdpRole, IdpUser};
+use super::ext::{IdentityProvider, IdpConfig, IdpError, IdpGroup, IdpGroupHeader, IdpRole, IdpUser};
 use async_trait::async_trait;
 use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
@@ -43,7 +43,7 @@ struct KeycloakGroup {
     pub id: Uuid,
     pub name: String,
     pub path: String,
-    pub sub_groups: Option<Vec<KeycloakGroup>>,
+    pub parent_id: Option<Uuid>,
     pub attributes: Option<HashMap<String, Vec<String>>>,
 }
 
@@ -156,25 +156,11 @@ impl KeycloakProvider {
     }
 
     fn convert_kc_group_to_idp_group(&self, kc_group: KeycloakGroup) -> IdpGroup {
-        // Extract parent ID from path if possible
-        let parent_id = if kc_group.path.contains('/') {
-            let path_parts: Vec<&str> =
-                kc_group.path.split('/').filter(|p| !p.is_empty()).collect();
-            if path_parts.len() > 1 {
-                // This is a non-root group, it has a parent
-                None // We would need to look up the parent by path, but for simplicity we'll leave this as None
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
         IdpGroup {
             id: kc_group.id,
             name: kc_group.name,
             path: kc_group.path,
-            parent_id,
+            parent_id: kc_group.parent_id,
             attributes: kc_group.attributes.unwrap_or_default(),
         }
     }
@@ -191,23 +177,6 @@ impl KeycloakProvider {
                 "realm".to_string()
             },
         }
-    }
-
-    // Convert Keycloak's nested group structure to a flat list
-    fn flatten_kc_groups(&self, groups: &[KeycloakGroup]) -> Vec<KeycloakGroup> {
-        let mut flat_groups = Vec::new();
-
-        for group in groups {
-            // Add the current group
-            flat_groups.push(group.clone());
-
-            // Recursively add subgroups if any
-            if let Some(ref sub_groups) = group.sub_groups {
-                flat_groups.extend(self.flatten_kc_groups(sub_groups));
-            }
-        }
-
-        flat_groups
     }
 }
 
@@ -427,56 +396,7 @@ impl IdentityProvider for KeycloakProvider {
         Ok(users)
     }
 
-    async fn find_users_by_email(&self, email: &str) -> Result<Vec<IdpUser>, IdpError> {
-        let headers = self.get_auth_headers()?;
-        let url = format!(
-            "{}/admin/realms/{}/users?email={}",
-            self.base_url, self.realm, email
-        );
-
-        debug!("Searching users with email: {}", email);
-        let response = match self.client.get(&url).headers(headers).send().await {
-            Ok(resp) => resp,
-            Err(e) => {
-                return Err(IdpError::NetworkError(format!(
-                    "Failed to connect to Keycloak: {}",
-                    e
-                )))
-            }
-        };
-
-        if !response.status().is_success() {
-            let error_text = match response.text().await {
-                Ok(text) => text,
-                Err(_) => "Unknown error".to_string(),
-            };
-            error!("Failed to search users: {}", error_text);
-            return Err(IdpError::Unknown(format!(
-                "Failed to search users: {}",
-                error_text
-            )));
-        }
-
-        let kc_users: Vec<KeycloakUser> = match response.json().await {
-            Ok(users) => users,
-            Err(e) => {
-                return Err(IdpError::Unknown(format!(
-                    "Failed to parse users response: {}",
-                    e
-                )))
-            }
-        };
-
-        // Convert to IdpUser type
-        let users = kc_users
-            .into_iter()
-            .map(|user| self.convert_kc_user_to_idp_user(user))
-            .collect();
-
-        Ok(users)
-    }
-
-    async fn get_groups(&self) -> Result<Vec<IdpGroup>, IdpError> {
+    async fn get_groups(&self) -> Result<Vec<IdpGroupHeader>, IdpError> {
         let headers = self.get_auth_headers()?;
         let url = format!("{}/admin/realms/{}/groups", self.base_url, self.realm);
 
@@ -503,7 +423,7 @@ impl IdentityProvider for KeycloakProvider {
             )));
         }
 
-        let kc_groups: Vec<KeycloakGroup> = match response.json().await {
+        let groups: Vec<IdpGroupHeader> = match response.json().await {
             Ok(groups) => groups,
             Err(e) => {
                 return Err(IdpError::Unknown(format!(
@@ -512,12 +432,6 @@ impl IdentityProvider for KeycloakProvider {
                 )))
             }
         };
-
-        // Convert to IdpGroup type
-        let groups = kc_groups
-            .into_iter()
-            .map(|group| self.convert_kc_group_to_idp_group(group))
-            .collect();
 
         info!("Successfully retrieved groups from Keycloak");
         Ok(groups)

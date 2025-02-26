@@ -26,6 +26,13 @@ pub struct IdpGroup {
     pub attributes: HashMap<String, Vec<String>>,
 }
 
+/// A generic group representation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdpGroupHeader {
+    pub id: Uuid,
+    pub name: String,
+}
+
 /// A generic role representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdpRole {
@@ -73,11 +80,8 @@ pub trait IdentityProvider: Send + Sync {
     /// Get users by username (exact or partial match)
     async fn find_users_by_username(&self, username: &str) -> Result<Vec<IdpUser>, IdpError>;
 
-    /// Get users by email (exact or partial match)
-    async fn find_users_by_email(&self, email: &str) -> Result<Vec<IdpUser>, IdpError>;
-
     /// Get all groups from the identity provider
-    async fn get_groups(&self) -> Result<Vec<IdpGroup>, IdpError>;
+    async fn get_groups(&self) -> Result<Vec<IdpGroupHeader>, IdpError>;
 
     /// Get a specific group by ID
     async fn get_group(&self, group_id: Uuid) -> Result<IdpGroup, IdpError>;

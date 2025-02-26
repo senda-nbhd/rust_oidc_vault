@@ -14,11 +14,17 @@ pub struct TeamIdentity {
     pub name: String,
 }
 
+/// Represents a team identity
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct InstitutionIdentity {
+    pub id: Uuid,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
 pub enum Role {
     Root,
     Advisor,
-    Viewer,
     Captain,
     Student,
     Spectator,
@@ -29,7 +35,6 @@ impl Role {
         match s {
             "ROOT" => Self::Root,
             "ADVISOR" => Self::Advisor,
-            "VIEWER" => Self::Viewer,
             "CAPTAIN" => Self::Captain,
             "STUDENT" => Self::Student,
             "SPECTATOR" => Self::Spectator,
@@ -41,7 +46,6 @@ impl Role {
         match self {
             Self::Root => "ROOT",
             Self::Advisor => "ADVISOR",
-            Self::Viewer => "VIEWER",
             Self::Captain => "CAPTAIN",
             Self::Student => "STUDENT",
             Self::Spectator => "SPECTATOR",
@@ -63,6 +67,7 @@ pub struct AiclIdentity {
     pub email: String,
     pub username: String,
     pub team: Option<TeamIdentity>,
+    pub institution: Option<InstitutionIdentity>,
     pub role: Role,
 }
 
@@ -150,7 +155,8 @@ pub fn to_domain_user(claims: &OidcClaims<AiclClaims>) -> Option<AiclIdentity> {
         id, 
         email, 
         username, 
-        team, 
+        team,
+        institution: None,
         role 
     })
 }

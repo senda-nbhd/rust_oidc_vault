@@ -3,13 +3,15 @@ use moka::future::{Cache, CacheBuilder};
 use std::{sync::{atomic::Ordering, Arc}, time::{Duration, Instant}};
 use uuid::Uuid;
 
-use crate::{AiclIdentity, Role, TeamIdentity};
+use crate::{AiclIdentity, InstitutionIdentity, Role, TeamIdentity};
 
-use super::{ext::{IdentityProvider, IdpConfig, IdpError, IdpGroup, IdpRole, IdpUser}, keycloak::KeycloakProvider};
+use super::{ext::{IdentityProvider, IdpConfig, IdpError, IdpGroup, IdpGroupHeader, IdpRole, IdpUser}, keycloak::KeycloakProvider};
 
 pub struct IdpAdmin {
     _config: IdpConfig,
     provider: Box<dyn IdentityProvider>,
+    teams_group_id: Uuid,
+    institutions_group_id: Uuid,
     // Cache for user data by user ID
     users_by_id: Cache<Uuid, Result<IdpUser, IdpError>>,
     // Cache for all users
@@ -19,7 +21,7 @@ pub struct IdpAdmin {
     // Cache for users by email
     users_by_email: Cache<Arc<str>, Result<Vec<IdpUser>, IdpError>>,
     // Cache for group by ID
-    all_groups_call: AtomicInstant,
+    all_groups: Cache<(), Vec<IdpGroupHeader>>,
     group_by_id: Cache<Uuid, Result<IdpGroup, IdpError>>,
     // Cache for group members
     group_members: Cache<Uuid, Result<Vec<IdpUser>, IdpError>>,
@@ -44,6 +46,18 @@ impl IdpAdmin {
         };
 
         provider.initialize().await?;
+        let groups = provider.get_groups().await?;
+        let teams_group_id = groups.iter().find(|g| g.name == "Teams").map(|g| g.id);
+        if teams_group_id.is_none() {
+            return Err(IdpError::InvalidInput("Teams group not found".to_string()));
+        }
+        let teams_group_id = teams_group_id.unwrap();
+
+        let institutions_group_id = groups.iter().find(|g| g.name == "Institutions").map(|g| g.id);
+        if institutions_group_id.is_none() {
+            return Err(IdpError::InvalidInput("Institutions group not found".to_string()));
+        }
+        let institutions_group_id = institutions_group_id.unwrap();
 
         // Create caches with appropriate TTL settings
         let cache_ttl = Duration::from_secs(120); // 2 minutes
@@ -55,7 +69,7 @@ impl IdpAdmin {
         let users_by_username = CacheBuilder::new(500).time_to_idle(cache_ttl).build();
 
         let users_by_email = CacheBuilder::new(500).time_to_idle(cache_ttl).build();
-        let all_groups_call = AtomicInstant::new(Instant::now() - Duration::from_secs(2000));
+        let all_groups = CacheBuilder::new(1).time_to_idle(cache_ttl).build();
         let group_by_id = CacheBuilder::new(500).time_to_idle(cache_ttl).build();
 
         let group_members = CacheBuilder::new(500).time_to_idle(cache_ttl).build();
@@ -69,11 +83,13 @@ impl IdpAdmin {
         Ok(Arc::new(IdpAdmin {
             _config: config,
             provider: Box::new(provider),
+            teams_group_id,
+            institutions_group_id,
             all_users_call,
             users_by_id,
             users_by_username,
             users_by_email,
-            all_groups_call,
+            all_groups,
             group_by_id,
             group_members,
             user_groups,
@@ -123,35 +139,11 @@ impl IdpAdmin {
             .await
     }
 
-    /// Find users by email with caching
-    pub async fn find_users_by_email(
-        self: &Arc<Self>,
-        email: &str,
-    ) -> Result<Vec<IdpUser>, IdpError> {
-        let email_arc = Arc::from(email);
-        let this = self.clone();
-
-        self.users_by_email
-            .get_with(email_arc, async move {
-                this.provider.find_users_by_email(email).await
-            })
-            .await
-    }
-
     /// Get all groups with caching
-    pub async fn get_groups(self: &Arc<Self>) -> Result<Vec<IdpGroup>, IdpError> {
+    pub async fn get_groups(self: &Arc<Self>) -> Result<Vec<IdpGroupHeader>, Arc<IdpError>> {
         let this = self.clone();
-        let all_groups_call = self.all_groups_call.load(Ordering::Relaxed);
-        if all_groups_call.elapsed() > std::time::Duration::from_secs(60) {
-            tracing::debug!("Refreshing all groups cache");
-            self.all_groups_call.store(std::time::Instant::now(), Ordering::Relaxed);
-            let all_groups = this.provider.get_groups().await?;
-            tracing::debug!(num_groups = all_groups.len(), "Loading groups into cache");
-            for group in all_groups {
-                self.group_by_id.insert(group.id, Ok(group)).await;
-            }
-        }
-        Ok(self.group_by_id.iter().filter_map(|(_,group)| group.ok()).collect())
+        self.all_groups.entry(()).or_try_insert_with( async move {this.provider.get_groups().await}).await.map(|entry| entry.into_value())
+        
     }
 
     /// Get a specific group by ID with caching
@@ -225,11 +217,24 @@ impl IdpAdmin {
         let groups = self.get_user_groups(user.id).await?;
         tracing::debug!("User {} is in groups {:?}", user.id, groups);
         let team = groups.iter().find_map(|group| {
-            // Look for team_id attribute in group
-            Some(TeamIdentity {
-                id: group.id,
-                name: group.name.clone(),
-            })
+            if group.parent_id == Some(self.teams_group_id) {
+                Some(TeamIdentity {
+                    id: group.id,
+                    name: group.name.clone(),
+                })
+            } else {
+                None
+            }
+        });
+        let institution = groups.iter().find_map(|group| {
+            if group.parent_id == Some(self.institutions_group_id) {
+                Some(InstitutionIdentity {
+                    id: group.id,
+                    name: group.name.clone(),
+                })
+            } else {
+                None
+            }
         });
         let roles = self.get_user_roles(user.id).await?;
         tracing::debug!(user.username, "User has {} roles.", roles.len());
@@ -253,6 +258,7 @@ impl IdpAdmin {
         Ok(AiclIdentity {
             username,
             team,
+            institution,
             role,
             email: user.email.clone(),
             id: user.id,

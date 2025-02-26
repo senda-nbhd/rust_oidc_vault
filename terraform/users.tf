@@ -55,10 +55,6 @@ module "identity" {
     {
       name        = "ADVISOR"
       description = "Academic advisor for institutions"
-    },
-    {
-      name        = "VIEWER"
-      description = "Read-only access to system resources"
     }
   ]
 }
@@ -98,7 +94,7 @@ module "users" {
       first_name = "Smith"
       last_name  = ""
       password   = "viewer"
-      roles      = ["TEAM_SPECTATOR"]
+      roles      = ["SPECTATOR"]
       team       = "Team1"
       institution = "School1"
     },
@@ -128,7 +124,7 @@ module "users" {
       first_name = "Stephanie"
       last_name  = ""
       password   = "viewer"
-      roles      = ["TEAM_SPECTATOR"]
+      roles      = ["SPECTATOR"]
       team       = "Team2"
       institution = "School1"
     },
@@ -159,14 +155,14 @@ module "users" {
       first_name = "Stephanie"
       last_name  = ""
       password   = "viewer"
-      roles      = ["TEAM_SPECTATOR"]
+      roles      = ["SPECTATOR"]
       team       = "Team3"
       institution = "School2"
     },
     # Advisors 
     {
       username   = "advisor1"
-      email      = "advisor1@competition.org"
+      email      = "advisor1@school1.org"
       first_name = "Advisor"
       last_name  = ""
       password   = "admin"
@@ -176,7 +172,7 @@ module "users" {
     },
     {
       username   = "advisor2"
-      email      = "advisor2@competition.org"
+      email      = "advisor2@school2.org"
       first_name = "Advisor"
       last_name  = ""
       password   = "admin"
