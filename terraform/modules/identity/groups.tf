@@ -1,15 +1,28 @@
 
+# Create team groups as subgroups of regions
+resource "keycloak_group" "institutions_parent" {
+  realm_id  = var.realm_id
+  name      = "Institutions"
+}
 
 # Create team groups as subgroups of regions
-resource "keycloak_group" "regions" {
-  for_each = { for region in var.regions : region.name => region }
+resource "keycloak_group" "institutions" {
+  for_each = { for team in var.institutions : team.name => team }
   
   realm_id  = var.realm_id
   name      = each.key
-
+  parent_id = keycloak_group.institutions_parent.id
+  
   attributes = {
-    "region_description" = each.value.description
+    "institution_description" = each.value.description
   }
+}
+
+# Create team groups as subgroups of regions
+resource "keycloak_group" "teams_parent" {
+  
+  realm_id  = var.realm_id
+  name      = "Teams"
 }
 
 # Create team groups as subgroups of regions
@@ -17,11 +30,10 @@ resource "keycloak_group" "teams" {
   for_each = { for team in var.teams : team.name => team }
   
   realm_id  = var.realm_id
-  parent_id = keycloak_group.regions[each.value.region].id
   name      = each.key
+  parent_id = keycloak_group.teams_parent.id
   
   attributes = {
-    "team_id"          = each.value.id
     "team_description" = each.value.description
   }
 }

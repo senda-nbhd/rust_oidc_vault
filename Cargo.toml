@@ -1,5 +1,5 @@
 [package]
-name = "oidc_rust"
+name = "aicl_oidc"
 version = "0.1.0"
 edition = "2021"
 
@@ -23,3 +23,8 @@ serde_json = "1.0.139"
 reqwest = { version = "0.12.12", features = ["json"] }
 moka = { version = "0.12.10", features = ["future"] }
 thiserror = "2.0.11"
+async-trait = "0.1.86"
+atomic-time = "0.1.5"
+
+[dev-dependencies]
+tracing-test = "0.2.5"

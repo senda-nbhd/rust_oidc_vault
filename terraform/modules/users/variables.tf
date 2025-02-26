@@ -20,10 +20,10 @@ variable "users" {
     email       = string
     first_name  = string
     last_name   = string
-    id          = string  # UUID for the user
     password    = string
     roles       = list(string)
     team        = string  # Team name
+    institution = string  # Institution name
   }))
   default = []
 }

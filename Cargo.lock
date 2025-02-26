@@ -27,6 +27,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "aicl_oidc"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "atomic-time",
+ "axum",
+ "axum-oidc",
+ "dotenvy",
+ "moka",
+ "openidconnect",
+ "reqwest 0.12.12",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.11",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tower-sessions",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-test",
+ "uuid",
+ "vaultrs",
+]
+
+[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -67,6 +93,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.98",
+]
+
+[[package]]
+name = "atomic-time"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9622f5c6fb50377516c70f65159e70b25465409760c6bd6d4e581318bf704e83"
+dependencies = [
+ "once_cell",
+ "portable-atomic",
 ]
 
 [[package]]
@@ -1606,29 +1642,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "oidc_rust"
-version = "0.1.0"
-dependencies = [
- "axum",
- "axum-oidc",
- "dotenvy",
- "moka",
- "openidconnect",
- "reqwest 0.12.12",
- "serde",
- "serde_json",
- "thiserror 2.0.11",
- "tokio",
- "tower",
- "tower-http",
- "tower-sessions",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "vaultrs",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3071,6 +3084,27 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "tracing-test"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "557b891436fe0d5e0e363427fc7f217abf9ccd510d5136549847bdcbcd011d68"
+dependencies = [
+ "tracing-core",
+ "tracing-subscriber",
+ "tracing-test-macro",
+]
+
+[[package]]
+name = "tracing-test-macro"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04659ddb06c87d233c566112c1c9c5b9e98256d9af50ec3bc9c8327f873a7568"
+dependencies = [
+ "quote",
+ "syn 2.0.98",
 ]
 
 [[package]]

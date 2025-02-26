@@ -8,12 +8,11 @@ variable "app_client_id" {
   type        = string
 }
 
-variable "regions" {
-  description = "List of team definitions with their regions"
+variable "institutions" {
+  description = "List of team definitions"
   type = list(object({
-    name      = string
+    name        = string
     description = string
-    code = string
   }))
   default = []
 }
@@ -21,10 +20,8 @@ variable "regions" {
 variable "teams" {
   description = "List of team definitions"
   type = list(object({
-    id          = string
     name        = string
     description = string
-    region      = string
   }))
   default = []
 }

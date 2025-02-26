@@ -1,109 +1,156 @@
-use axum::{
-    error_handling::HandleErrorLayer, http::Uri, response::IntoResponse, routing::get, Router,
-};
-use axum_oidc::{
-    error::MiddlewareError, OidcAuthLayer, OidcClaims, OidcLoginLayer,
-    OidcRpInitiatedLogout,
-};
-use ident::AiclClaims;
-use openidconnect::RequestTokenError;
+pub mod idp;
+
+
+
+use axum_oidc::OidcClaims;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::net::TcpListener;
-use tower::ServiceBuilder;
-use tower_http::trace::TraceLayer;
-use tower_sessions::{
-    cookie::{time::Duration, SameSite},
-    Expiry, MemoryStore, SessionManagerLayer,
-};
+use uuid::Uuid;
 
-mod ident;
-
-pub async fn run(
-    app_url: String,
-    issuer: String,
-    client_id: String,
-    client_secret: Option<String>,
-) {
-    let session_store = MemoryStore::default();
-    let session_layer = SessionManagerLayer::new(session_store)
-        .with_secure(false)
-        .with_same_site(SameSite::Lax)
-        .with_expiry(Expiry::OnInactivity(Duration::seconds(120)));
-
-    let oidc_login_service = ServiceBuilder::new()
-        .layer(HandleErrorLayer::new(|e: MiddlewareError| async {
-            match &e {
-                MiddlewareError::RequestToken(RequestTokenError::Parse(error, payload)) => {
-                    tracing::error!("Failed to parse request token: {:?}", error);
-                    let payload_str: Value = serde_json::from_slice(&payload).unwrap();
-                    tracing::error!("Request token payload: {}", serde_json::to_string_pretty(&payload_str).unwrap());
-                },
-                err => {
-                    tracing::error!("Unhandled error: {:?}", err);
-                }
-            }
-            e.into_response()
-        }))
-        .layer(OidcLoginLayer::<AiclClaims>::new());
-
-    let oidc_auth_service = ServiceBuilder::new()
-        .layer(HandleErrorLayer::new(|e: MiddlewareError| async {
-            match &e {
-                MiddlewareError::RequestToken(RequestTokenError::Parse(error, payload)) => {
-                    tracing::error!("Failed to parse request token: {:?}", error);
-                    let payload_str: Value = serde_json::from_slice(&payload).unwrap();
-                    tracing::error!("Request token payload: {}", serde_json::to_string_pretty(&payload_str).unwrap());
-                },
-                err => {
-                    tracing::error!("Unhandled error: {:?}", err);
-                }
-            }
-            e.into_response()
-        }))
-        .layer(
-            OidcAuthLayer::<AiclClaims>::discover_client(
-                Uri::from_maybe_shared(app_url.clone()).expect("valid APP_URL"),
-                issuer,
-                client_id,
-                client_secret,
-                vec![],
-            )
-            .await
-            .unwrap(),
-        );
-
-    let app = Router::new()
-        .route("/foo", get(authenticated))
-        .route("/logout", get(logout))
-        .layer(oidc_login_service)
-        .route("/bar", get(maybe_authenticated))
-        .layer(oidc_auth_service)
-        .layer(session_layer)
-        .layer(TraceLayer::new_for_http());
-
-    let listener = TcpListener::bind("0.0.0.0:4040").await.unwrap();
-    axum::serve(listener, app.into_make_service())
-        .await
-        .unwrap();
+/// Represents a team identity
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct TeamIdentity {
+    pub id: Uuid,
+    pub name: String,
 }
 
-async fn authenticated(claims: OidcClaims<AiclClaims>) -> impl IntoResponse {
-    format!("Hello {}, {}", claims.subject().as_str(), serde_json::to_string_pretty(&claims.additional_claims()).unwrap())
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
+pub enum Role {
+    Root,
+    Advisor,
+    Viewer,
+    Captain,
+    Student,
+    Spectator,
 }
 
-#[axum::debug_handler]
-async fn maybe_authenticated(
-    claims: Result<OidcClaims<AiclClaims>, axum_oidc::error::ExtractorError>,
-) -> impl IntoResponse {
-    match claims.map(|claims| (claims.additional_claims().to_identity(), claims)) {
-        Ok((Some(identity), _)) => format!("Hello {}! You are already logged in.", identity.name),
-        Ok((None, claims)) => {
-            format!("Hello {}! You are already logged in, but your identity is misconfigured", claims.subject().as_str())
+impl Role {
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "ROOT" => Self::Root,
+            "ADVISOR" => Self::Advisor,
+            "VIEWER" => Self::Viewer,
+            "CAPTAIN" => Self::Captain,
+            "STUDENT" => Self::Student,
+            "SPECTATOR" => Self::Spectator,
+            _ => panic!("Role not found: {}", s),
         }
-        Err(_) => "Hello anon!".to_string(),
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Root => "ROOT",
+            Self::Advisor => "ADVISOR",
+            Self::Viewer => "VIEWER",
+            Self::Captain => "CAPTAIN",
+            Self::Student => "STUDENT",
+            Self::Spectator => "SPECTATOR",
+        }
+    }
+
+    pub fn is_admin(&self) -> bool {
+        match self {
+            Self::Root => true,
+            _ => false,
+        }
     }
 }
 
-async fn logout(logout: OidcRpInitiatedLogout) -> impl IntoResponse {
-    logout.with_post_logout_redirect(Uri::from_static("/"))
+/// Represents a user's identity in the AICL system
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct AiclIdentity {
+    pub id: Uuid,
+    pub email: String,
+    pub username: String,
+    pub team: Option<TeamIdentity>,
+    pub role: Role,
+}
+
+/// Custom claims extracted from the OIDC token
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiclClaims {
+    // Make these fields accept either string or array
+    #[serde(default)]
+    pub roles: Option<Value>,
+
+    #[serde(default)]
+    pub groups: Option<Value>,
+
+    pub team_id: Vec<Uuid>,
+}
+
+impl openidconnect::AdditionalClaims for AiclClaims {}
+impl axum_oidc::AdditionalClaims for AiclClaims {}
+
+impl AiclClaims {
+    /// Extract roles from Value which could be either a string or array
+    fn extract_roles(&self) -> Vec<String> {
+        match &self.roles {
+            Some(Value::Array(arr)) => arr
+                .iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect(),
+            Some(Value::String(s)) => vec![s.clone()],
+            _ => vec![],
+        }
+    }
+
+    /// Extract groups from Value which could be either a string or array
+    fn extract_groups(&self) -> Vec<String> {
+        match &self.groups {
+            Some(Value::Array(arr)) => arr
+                .iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect(),
+            Some(Value::String(s)) => vec![s.clone()],
+            _ => vec![],
+        }
+    }
+
+}
+
+pub fn to_domain_user(claims: &OidcClaims<AiclClaims>) -> Option<AiclIdentity> {
+    // Extract name from claims
+    let extra_claims = claims.additional_claims();
+    
+    // Extract subject ID
+    let id: Uuid = claims.subject().parse().ok()?;
+    
+    // Extract email
+    let email = claims.email()?.as_str().to_string();
+    
+    // Extract username
+    let username = claims.preferred_username()?.as_str().to_string();
+    
+    // TODO make this get given and family names if username is missing.
+
+    // Extract team information
+    let groups = extra_claims.extract_groups();
+    let team = match (extra_claims.team_id.last(), !groups.is_empty()) {
+        (Some(team_id), true) => {
+            // Get the group name from the path (taking last segment)
+            let team_name = groups[0].split('/').last().unwrap_or("Unknown").to_string();
+
+            Some(TeamIdentity {
+                id: *team_id,
+                name: team_name,
+            })
+        }
+        _ => None,
+    };
+
+    // Determine role (default to Spectator if no roles found)
+    let roles = extra_claims.extract_roles();
+    let role = match roles.first().map(|r| Role::parse(r)) {
+        Some(role) => role,
+        _ => Role::Spectator,
+    };
+
+    Some(AiclIdentity { 
+        id, 
+        email, 
+        username, 
+        team, 
+        role 
+    })
 }

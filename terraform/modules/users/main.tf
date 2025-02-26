@@ -21,10 +21,6 @@ resource "keycloak_user" "users" {
   first_name = each.value.first_name
   last_name  = each.value.last_name
 
-  attributes = {
-    "id" = each.value.id  # Store UUID as an attribute
-  }
-
   initial_password {
     value     = each.value.password
     temporary = false
@@ -46,13 +42,25 @@ resource "keycloak_user_roles" "user_roles" {
 }
 
 # Assign users to their teams (groups)
-resource "keycloak_user_groups" "user_groups" {
-  for_each = { for user in var.users : user.username => user }
+resource "keycloak_user_groups" "team_groups" {
+  for_each = {
+    for user in var.users : user.username => user
+    if user.team != null
+  }
   
-  realm_id = var.realm_id
-  user_id  = keycloak_user.users[each.key].id
+  realm_id  = var.realm_id
+  user_id   = keycloak_user.users[each.key].id
+  group_ids = [lookup(var.groups, each.value.team, "")]
+}
+
+# Assign users to their institution groups
+resource "keycloak_user_groups" "institution_groups" {
+  for_each = {
+    for user in var.users : "${user.username}-inst" => user
+    if user.institution != null
+  }
   
-  group_ids = [
-    lookup(var.groups, each.value.team, "")
-  ]
+  realm_id  = var.realm_id
+  user_id   = keycloak_user.users[trimsuffix(each.key, "-inst")].id
+  group_ids = [lookup(var.groups, each.value.institution, "")]
 }

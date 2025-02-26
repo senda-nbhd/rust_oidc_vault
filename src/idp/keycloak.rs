@@ -1,5 +1,5 @@
-use super::{AiclIdentity, Role, TeamIdentity};
-use super::idp_admin::{IdentityProvider, IdpConfig, IdpError, IdpGroup, IdpRole, IdpUser};
+use super::ext::{IdentityProvider, IdpConfig, IdpError, IdpGroup, IdpRole, IdpUser};
+use async_trait::async_trait;
 use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -26,46 +26,47 @@ struct TokenResponse {
 
 // Keycloak specific types (kept private to this module)
 #[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 struct KeycloakUser {
-    pub id: String,
+    pub id: Uuid,
     pub username: String,
     pub enabled: bool,
-    pub email: Option<String>,
-    pub firstName: Option<String>,
-    pub lastName: Option<String>,
+    pub email: String,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
     pub attributes: Option<HashMap<String, Vec<String>>>,
-    #[serde(skip_deserializing)]
-    pub groups: Vec<KeycloakGroup>,
-    #[serde(skip_deserializing)]
-    pub roles: Vec<KeycloakRole>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 struct KeycloakGroup {
-    pub id: String,
+    pub id: Uuid,
     pub name: String,
     pub path: String,
-    pub subGroups: Option<Vec<KeycloakGroup>>,
+    pub sub_groups: Option<Vec<KeycloakGroup>>,
     pub attributes: Option<HashMap<String, Vec<String>>>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 struct KeycloakRole {
-    pub id: String,
+    pub id: Uuid,
     pub name: String,
     pub description: Option<String>,
     pub composite: bool,
-    pub clientRole: bool,
-    pub containerId: String,
+    pub client_role: bool,
+    pub container_id: String,
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct RoleMappingContainer {
-    pub realmMappings: Option<Vec<KeycloakRole>>,
-    pub clientMappings: Option<HashMap<String, ClientRoleMapping>>,
+    pub realm_mappings: Option<Vec<KeycloakRole>>,
+    pub client_mappings: Option<HashMap<String, ClientRoleMapping>>,
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct ClientRoleMapping {
     pub id: String,
     pub client: String,
@@ -73,9 +74,10 @@ struct ClientRoleMapping {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 struct KeycloakClient {
     pub id: String,
-    pub clientId: String,
+    pub client_id: String,
     pub name: Option<String>,
     pub description: Option<String>,
     pub enabled: bool,
@@ -146,19 +148,9 @@ impl KeycloakProvider {
             id: kc_user.id,
             username: kc_user.username,
             email: kc_user.email,
-            first_name: kc_user.firstName,
-            last_name: kc_user.lastName,
+            first_name: kc_user.first_name,
+            last_name: kc_user.last_name,
             enabled: kc_user.enabled,
-            groups: kc_user
-                .groups
-                .into_iter()
-                .map(|g| self.convert_kc_group_to_idp_group(g))
-                .collect(),
-            roles: kc_user
-                .roles
-                .into_iter()
-                .map(|r| self.convert_kc_role_to_idp_role(r))
-                .collect(),
             attributes: kc_user.attributes.unwrap_or_default(),
         }
     }
@@ -193,8 +185,8 @@ impl KeycloakProvider {
             name: kc_role.name,
             description: kc_role.description,
             is_composite: kc_role.composite,
-            source: if kc_role.clientRole {
-                format!("client:{}", kc_role.containerId)
+            source: if kc_role.client_role {
+                format!("client:{}", kc_role.container_id)
             } else {
                 "realm".to_string()
             },
@@ -210,7 +202,7 @@ impl KeycloakProvider {
             flat_groups.push(group.clone());
 
             // Recursively add subgroups if any
-            if let Some(ref sub_groups) = group.subGroups {
+            if let Some(ref sub_groups) = group.sub_groups {
                 flat_groups.extend(self.flatten_kc_groups(sub_groups));
             }
         }
@@ -219,6 +211,7 @@ impl KeycloakProvider {
     }
 }
 
+#[async_trait]
 impl IdentityProvider for KeycloakProvider {
     async fn initialize(&mut self) -> Result<(), IdpError> {
         let token_url = format!(
@@ -324,7 +317,7 @@ impl IdentityProvider for KeycloakProvider {
         Ok(users)
     }
 
-    async fn get_user(&self, user_id: &str) -> Result<IdpUser, IdpError> {
+    async fn get_user(&self, user_id: Uuid) -> Result<IdpUser, IdpError> {
         let headers = self.get_auth_headers()?;
         let url = format!(
             "{}/admin/realms/{}/users/{}",
@@ -382,71 +375,7 @@ impl IdentityProvider for KeycloakProvider {
             }
         };
 
-        // Get user's groups and roles
-        let mut user_with_details = kc_user.clone();
-
-        // Get groups
-        match self.get_user_groups(user_id).await {
-            Ok(groups) => {
-                // Convert back to Keycloak groups (internal conversion)
-                let kc_groups = groups
-                    .into_iter()
-                    .map(|g| KeycloakGroup {
-                        id: g.id,
-                        name: g.name,
-                        path: g.path,
-                        subGroups: None,
-                        attributes: Some(g.attributes),
-                    })
-                    .collect();
-                user_with_details.groups = kc_groups;
-            }
-            Err(e) => {
-                error!("Failed to get groups for user {}: {}", user_id, e);
-                user_with_details.groups = vec![];
-            }
-        }
-
-        // Get roles
-        let url = format!(
-            "{}/admin/realms/{}/users/{}/role-mappings",
-            self.base_url, self.realm, user_id
-        );
-        let response = match self.client.get(&url).headers(headers.clone()).send().await {
-            Ok(resp) => resp,
-            Err(e) => {
-                return Err(IdpError::NetworkError(format!(
-                    "Failed to connect to Keycloak: {}",
-                    e
-                )))
-            }
-        };
-
-        if response.status().is_success() {
-            let role_mappings: RoleMappingContainer = match response.json().await {
-                Ok(mappings) => mappings,
-                Err(e) => {
-                    return Err(IdpError::Unknown(format!(
-                        "Failed to parse role mappings: {}",
-                        e
-                    )))
-                }
-            };
-
-            // Add realm roles
-            if let Some(realm_roles) = role_mappings.realmMappings {
-                user_with_details.roles.extend(realm_roles);
-            }
-
-            // Add client roles
-            if let Some(client_mappings) = role_mappings.clientMappings {
-                for (_, client_roles) in client_mappings {
-                    user_with_details.roles.extend(client_roles.mappings);
-                }
-            }
-        }
-
-        Ok(self.convert_kc_user_to_idp_user(user_with_details))
+        Ok(self.convert_kc_user_to_idp_user(kc_user))
     }
 
     async fn find_users_by_username(&self, username: &str) -> Result<Vec<IdpUser>, IdpError> {
@@ -594,7 +523,7 @@ impl IdentityProvider for KeycloakProvider {
         Ok(groups)
     }
 
-    async fn get_group(&self, group_id: &str) -> Result<IdpGroup, IdpError> {
+    async fn get_group(&self, group_id: Uuid) -> Result<IdpGroup, IdpError> {
         let headers = self.get_auth_headers()?;
         let url = format!(
             "{}/admin/realms/{}/groups/{}",
@@ -655,7 +584,7 @@ impl IdentityProvider for KeycloakProvider {
         Ok(self.convert_kc_group_to_idp_group(kc_group))
     }
 
-    async fn get_group_members(&self, group_id: &str) -> Result<Vec<IdpUser>, IdpError> {
+    async fn get_group_members(&self, group_id: Uuid) -> Result<Vec<IdpUser>, IdpError> {
         let headers = self.get_auth_headers()?;
         let url = format!(
             "{}/admin/realms/{}/groups/{}/members",
@@ -722,7 +651,7 @@ impl IdentityProvider for KeycloakProvider {
         Ok(users)
     }
 
-    async fn get_user_groups(&self, user_id: &str) -> Result<Vec<IdpGroup>, IdpError> {
+    async fn get_user_groups(&self, user_id: Uuid) -> Result<Vec<IdpGroup>, IdpError> {
         let headers = self.get_auth_headers()?;
         let url = format!(
             "{}/admin/realms/{}/users/{}/groups",
@@ -789,129 +718,7 @@ impl IdentityProvider for KeycloakProvider {
         Ok(groups)
     }
 
-    async fn get_roles(&self) -> Result<Vec<IdpRole>, IdpError> {
-        let headers = self.get_auth_headers()?;
-        let url = format!("{}/admin/realms/{}/roles", self.base_url, self.realm);
-
-        debug!("Fetching roles from: {}", url);
-        let response = match self.client.get(&url).headers(headers.clone()).send().await {
-            Ok(resp) => resp,
-            Err(e) => {
-                return Err(IdpError::NetworkError(format!(
-                    "Failed to connect to Keycloak: {}",
-                    e
-                )))
-            }
-        };
-
-        if !response.status().is_success() {
-            let error_text = match response.text().await {
-                Ok(text) => text,
-                Err(_) => "Unknown error".to_string(),
-            };
-            error!("Failed to get roles: {}", error_text);
-            return Err(IdpError::Unknown(format!(
-                "Failed to get roles: {}",
-                error_text
-            )));
-        }
-
-        let kc_roles: Vec<KeycloakRole> = match response.json().await {
-            Ok(roles) => roles,
-            Err(e) => {
-                return Err(IdpError::Unknown(format!(
-                    "Failed to parse roles response: {}",
-                    e
-                )))
-            }
-        };
-
-        // Convert to IdpRole type
-        let roles: Vec<IdpRole> = kc_roles
-            .into_iter()
-            .map(|role| self.convert_kc_role_to_idp_role(role))
-            .collect();
-
-        // Get client roles as well
-        let clients_url = format!("{}/admin/realms/{}/clients", self.base_url, self.realm);
-        let clients_response = match self
-            .client
-            .get(&clients_url)
-            .headers(headers.clone())
-            .send()
-            .await
-        {
-            Ok(resp) => resp,
-            Err(e) => {
-                return Err(IdpError::NetworkError(format!(
-                    "Failed to connect to Keycloak: {}",
-                    e
-                )))
-            }
-        };
-
-        if clients_response.status().is_success() {
-            let clients: Vec<KeycloakClient> = match clients_response.json().await {
-                Ok(c) => c,
-                Err(e) => {
-                    return Err(IdpError::Unknown(format!(
-                        "Failed to parse clients response: {}",
-                        e
-                    )))
-                }
-            };
-
-            // Get roles for each client
-            let mut client_roles = Vec::new();
-            for client in clients {
-                let client_roles_url = format!(
-                    "{}/admin/realms/{}/clients/{}/roles",
-                    self.base_url, self.realm, client.id
-                );
-
-                let client_roles_response = match self
-                    .client
-                    .get(&client_roles_url)
-                    .headers(headers.clone())
-                    .send()
-                    .await
-                {
-                    Ok(resp) => resp,
-                    Err(e) => {
-                        warn!("Failed to get roles for client {}: {}", client.id, e);
-                        continue;
-                    }
-                };
-
-                if client_roles_response.status().is_success() {
-                    let mut roles: Vec<KeycloakRole> = match client_roles_response.json().await {
-                        Ok(r) => r,
-                        Err(e) => {
-                            warn!("Failed to parse roles for client {}: {}", client.id, e);
-                            continue;
-                        }
-                    };
-
-                    client_roles.append(&mut roles);
-                }
-            }
-
-            // Add client roles to the result
-            let client_idp_roles = client_roles
-                .into_iter()
-                .map(|role| self.convert_kc_role_to_idp_role(role))
-                .collect::<Vec<IdpRole>>();
-
-            let mut all_roles = roles;
-            all_roles.extend(client_idp_roles);
-            return Ok(all_roles);
-        }
-
-        info!("Successfully retrieved roles from Keycloak");
-        Ok(roles)
-    }
-
-    async fn get_user_roles(&self, user_id: &str) -> Result<Vec<IdpRole>, IdpError> {
+    async fn get_user_roles(&self, user_id: Uuid) -> Result<Vec<IdpRole>, IdpError> {
         let headers = self.get_auth_headers()?;
         let url = format!(
             "{}/admin/realms/{}/users/{}/role-mappings",
@@ -972,12 +779,12 @@ impl IdentityProvider for KeycloakProvider {
         let mut all_roles = Vec::new();
 
         // Add realm roles
-        if let Some(realm_roles) = role_mappings.realmMappings {
+        if let Some(realm_roles) = role_mappings.realm_mappings {
             all_roles.extend(realm_roles);
         }
 
         // Add client roles
-        if let Some(client_mappings) = role_mappings.clientMappings {
+        if let Some(client_mappings) = role_mappings.client_mappings {
             for (_, client_roles) in client_mappings {
                 all_roles.extend(client_roles.mappings);
             }
@@ -1011,91 +818,5 @@ impl IdentityProvider for KeycloakProvider {
         }
 
         flat_groups
-    }
-
-    async fn get_comprehensive_report(&self) -> Result<Vec<IdpUser>, IdpError> {
-        // Get all users
-        let mut users = self.get_users().await?;
-
-        // For each user, get their groups and roles
-        for user in &mut users {
-            // Get user's groups
-            match self.get_user_groups(&user.id).await {
-                Ok(groups) => {
-                    user.groups = groups;
-                }
-                Err(e) => {
-                    error!("Failed to get groups for user {}: {}", user.id, e);
-                    user.groups = vec![];
-                }
-            }
-
-            // Get user's roles
-            match self.get_user_roles(&user.id).await {
-                Ok(roles) => {
-                    user.roles = roles;
-                }
-                Err(e) => {
-                    error!("Failed to get roles for user {}: {}", user.id, e);
-                    user.roles = vec![];
-                }
-            }
-        }
-
-        Ok(users)
-    }
-
-    fn to_domain_user(&self, user: &IdpUser) -> Result<AiclIdentity,IdpError>  {
-        // Extract team information from user's groups
-        let team = user.groups.iter().find_map(|group| {
-            // Look for team_id attribute in group
-            let team_id = group
-                .attributes
-                .get("team_id")
-                .and_then(|ids| ids.first())
-                .and_then(|id_str| {
-                    match Uuid::parse_str(id_str) {
-                        Ok(id) => Some(id),
-                        Err(err) => {
-                            error!(group.name, "Failed to parse team ID: {}", err);
-                            None
-                        },
-                    }
-                });
-
-            if let Some(id) = team_id {
-                Some(TeamIdentity {
-                    id,
-                    name: group.name.clone(),
-                })
-            } else {
-                None
-            }
-        });
-
-        if user.roles.len() > 0 {
-            tracing::error!(user.username, "User has multiple roles, only the first one will be used.");
-        }
-        if user.roles.len() == 0 {
-            tracing::error!(user.username, "User has no roles.");
-        }
-
-        let role = match user.roles.first().map(|r| Role::parse(&r.name)) {
-            Some(role) => role,
-            _ => Role::Spectator,
-        };
-
-
-        Ok(AiclIdentity {
-            name: format!(
-                "{} {}",
-                user.first_name.clone().unwrap_or_default(),
-                user.last_name.clone().unwrap_or_default()
-            )
-            .trim()
-            .to_string(),
-            team,
-            role,
-        })
     }
 }
