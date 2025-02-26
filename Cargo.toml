@@ -11,7 +11,7 @@ axum-oidc = "0.6.0"
 tower = "0.5"
 tower-sessions = "0.14"
 
-tower-http = { version = "0.6.2", features = ["auth", "trace", "fs"] }
+tower-http = { version = "0.6.2", features = ["auth", "trace", "fs", "util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -25,6 +25,7 @@ moka = { version = "0.12.10", features = ["future"] }
 thiserror = "2.0.11"
 async-trait = "0.1.86"
 atomic-time = "0.1.5"
+futures-util = "0.3.31"
 
 [dev-dependencies]
 tracing-test = "0.2.5"

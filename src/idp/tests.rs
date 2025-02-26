@@ -1,4 +1,4 @@
-use super::{ext::IdpConfig, admin::IdpAdmin};
+use super::{admin::IdpAdmin, ext::IdpConfig};
 use crate::Role;
 use std::env;
 
@@ -215,10 +215,7 @@ async fn test_group_membership_and_attributes() {
         .expect("Failed to create IdpAdmin");
 
     // Get Stanford advisor
-    let advisor_result = admin
-        .find_users_by_username("advisor1")
-        .await
-        .unwrap();
+    let advisor_result = admin.find_users_by_username("advisor1").await.unwrap();
     let advisor = &advisor_result[0];
 
     // Get advisor's groups
@@ -294,7 +291,16 @@ async fn test_comprehensive_report() {
     // Verify all users have their roles and groups populated
     for user in &report {
         // Root and global viewers don't have groups
-        if !["root", "root2", "viewer_global", "viewer_global2", "advisor1", "advisor2"].contains(&user.username.as_str()) {
+        if ![
+            "root",
+            "root2",
+            "viewer_global",
+            "viewer_global2",
+            "advisor1",
+            "advisor2",
+        ]
+        .contains(&user.username.as_str())
+        {
             assert!(
                 user.team.is_some(),
                 "User {} should have a team",
@@ -323,10 +329,7 @@ async fn test_cache_invalidation() {
         .expect("Failed to create IdpAdmin");
 
     // First load data into cache
-    let advisor_result = admin
-        .find_users_by_username("advisor1")
-        .await
-        .unwrap();
+    let advisor_result = admin.find_users_by_username("advisor1").await.unwrap();
     let advisor = &advisor_result[0];
 
     // Load groups into cache

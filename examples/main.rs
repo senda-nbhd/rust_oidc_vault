@@ -1,9 +1,9 @@
-use aicl_oidc::{to_domain_user, AiclClaims};
 use axum::{
     error_handling::HandleErrorLayer, http::Uri, response::IntoResponse, routing::get, Router,
 };
 use axum_oidc::{
-    error::MiddlewareError, OidcAuthLayer, OidcClaims, OidcLoginLayer, OidcRpInitiatedLogout,
+    error::MiddlewareError, EmptyAdditionalClaims, OidcAuthLayer, OidcClaims, OidcLoginLayer,
+    OidcRpInitiatedLogout,
 };
 use openidconnect::RequestTokenError;
 use serde_json::Value;
@@ -79,7 +79,7 @@ pub async fn run(
             }
             e.into_response()
         }))
-        .layer(OidcLoginLayer::<AiclClaims>::new());
+        .layer(OidcLoginLayer::<EmptyAdditionalClaims>::new());
 
     let oidc_auth_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|e: MiddlewareError| async {
@@ -99,7 +99,7 @@ pub async fn run(
             e.into_response()
         }))
         .layer(
-            OidcAuthLayer::<AiclClaims>::discover_client(
+            OidcAuthLayer::<EmptyAdditionalClaims>::discover_client(
                 Uri::from_maybe_shared(app_url.clone()).expect("valid APP_URL"),
                 issuer,
                 client_id,
@@ -125,7 +125,7 @@ pub async fn run(
         .unwrap();
 }
 
-async fn authenticated(claims: OidcClaims<AiclClaims>) -> impl IntoResponse {
+async fn authenticated(claims: OidcClaims<EmptyAdditionalClaims>) -> impl IntoResponse {
     format!(
         "Hello {}, {}",
         claims.subject().as_str(),
@@ -135,10 +135,12 @@ async fn authenticated(claims: OidcClaims<AiclClaims>) -> impl IntoResponse {
 
 #[axum::debug_handler]
 async fn maybe_authenticated(
-    claims: Result<OidcClaims<AiclClaims>, axum_oidc::error::ExtractorError>,
+    claims: Result<OidcClaims<EmptyAdditionalClaims>, axum_oidc::error::ExtractorError>,
 ) -> impl IntoResponse {
     match claims.map(|claims| (to_domain_user(&claims), claims)) {
-        Ok((Some(identity), _)) => format!("Hello {}! You are already logged in.", identity.username),
+        Ok((Some(identity), _)) => {
+            format!("Hello {}! You are already logged in.", identity.username)
+        }
         Ok((None, claims)) => {
             format!(
                 "Hello {}! You are already logged in, but your identity is misconfigured",

@@ -61,9 +61,7 @@ services:
     cap_add:
       - IPC_LOCK
     entrypoint: vault server -dev -dev-root-token-id="myroot" -dev-listen-address="0.0.0.0:8200"
-    depends_on:
-      wait-for-keycloak:
-        condition: service_completed_successfully
+    
    
   terraform:
     build:
@@ -71,8 +69,8 @@ services:
       dockerfile: Dockerfile
     container_name: terraform
     depends_on:
-      - keycloak
-      - vault
+      wait-for-keycloak:
+        condition: service_completed_successfully
 
 volumes:
   postgres-data:
