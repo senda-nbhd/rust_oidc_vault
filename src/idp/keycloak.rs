@@ -241,6 +241,10 @@ impl IdentityProvider for KeycloakProvider {
         Ok(())
     }
 
+    fn issuer(&self) -> String {
+        format!("{}/realms/{}", self.base_url, self.realm)
+    }
+
     async fn get_users(&self) -> Result<Vec<IdpUser>, IdpError> {
         let headers = self.get_auth_headers()?;
         let url = format!("{}/admin/realms/{}/users", self.base_url, self.realm);

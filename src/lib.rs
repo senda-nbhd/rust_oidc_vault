@@ -1,6 +1,7 @@
 pub mod axum;
 pub mod idp;
 pub mod oidc;
+pub mod vault;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -68,3 +69,4 @@ pub struct AiclIdentity {
     pub institution: Option<InstitutionIdentity>,
     pub role: Role,
 }
+

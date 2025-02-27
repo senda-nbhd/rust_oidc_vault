@@ -1,8 +1,11 @@
+use std::sync::Arc;
+
+use aicl_oidc::{axum::extractors::OptionalIdentity, idp::admin::IdpAdmin, vault::VaultService};
 use axum::{
     error_handling::HandleErrorLayer, http::Uri, response::IntoResponse, routing::get, Router,
 };
 use axum_oidc::{
-    error::MiddlewareError, EmptyAdditionalClaims, OidcAuthLayer, OidcClaims, OidcLoginLayer,
+    error::MiddlewareError, EmptyAdditionalClaims, OidcClaims, OidcLoginLayer,
     OidcRpInitiatedLogout,
 };
 use openidconnect::RequestTokenError;
@@ -15,46 +18,10 @@ use tower_sessions::{
     Expiry, MemoryStore, SessionManagerLayer,
 };
 
-use serde::Deserialize;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-use vaultrs::{
-    client::{VaultClient, VaultClientSettingsBuilder},
-    kv2,
-};
-
-#[derive(Deserialize, Debug)]
-struct OidcConfig {
-    app_url: String,
-    issuer: String,
-    client_id: String,
-    client_secret: String,
-}
-
-async fn get_oidc_config_from_vault() -> Result<OidcConfig, Box<dyn std::error::Error>> {
-    let address = std::env::var("VAULT_ADDR").ok().unwrap();
-    let settings = VaultClientSettingsBuilder::default()
-        .address(address)
-        .build()
-        .unwrap();
-    let client = VaultClient::new(settings).unwrap();
-    let key = "oidc/app-config";
-    match kv2::read::<OidcConfig>(&client, "secret", key).await {
-        Ok(secret) => {
-            tracing::debug!("Got secret {}", key);
-            Ok(secret)
-        }
-        Err(e) => {
-            tracing::error!("Failed to get secret {}: {}", key, e);
-            Err(e.into())
-        }
-    }
-}
 
 pub async fn run(
-    app_url: String,
-    issuer: String,
-    client_id: String,
-    client_secret: Option<String>,
+    idp: Arc<IdpAdmin>,
 ) {
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
@@ -98,24 +65,17 @@ pub async fn run(
             }
             e.into_response()
         }))
-        .layer(
-            OidcAuthLayer::<EmptyAdditionalClaims>::discover_client(
-                Uri::from_maybe_shared(app_url.clone()).expect("valid APP_URL"),
-                issuer,
-                client_id,
-                client_secret,
-                vec![],
-            )
-            .await
-            .unwrap(),
-        );
+        .layer(idp.oidc_auth_layer("http://localhost:4040".to_string()).await.expect("Admin idp built"));
 
-    let app = Router::new()
+    let app: Router<()> = Router::new();
+
+    let app = app
         .route("/foo", get(authenticated))
         .route("/logout", get(logout))
         .layer(oidc_login_service)
         .route("/bar", get(maybe_authenticated))
         .layer(oidc_auth_service)
+        .layer(idp.layer())
         .layer(session_layer)
         .layer(TraceLayer::new_for_http());
 
@@ -135,9 +95,10 @@ async fn authenticated(claims: OidcClaims<EmptyAdditionalClaims>) -> impl IntoRe
 
 #[axum::debug_handler]
 async fn maybe_authenticated(
+    OptionalIdentity(maybe_user): OptionalIdentity,
     claims: Result<OidcClaims<EmptyAdditionalClaims>, axum_oidc::error::ExtractorError>,
 ) -> impl IntoResponse {
-    match claims.map(|claims| (to_domain_user(&claims), claims)) {
+    match claims.map(|claims| (maybe_user, claims)) {
         Ok((Some(identity), _)) => {
             format!("Hello {}! You are already logged in.", identity.username)
         }
@@ -170,14 +131,11 @@ async fn main() {
 
     // Log application startup
     tracing::info!("Starting OIDC application");
-    let config = get_oidc_config_from_vault()
-        .await
-        .expect("Unable to get config from vault");
+    let vault = VaultService::from_env().await.expect("Vault service initialization failed");
+    let idp_config = vault.get_idp_config_from_vault().await.expect("Failed to get IDP config from Vault");
+    let idp_admin = IdpAdmin::new(idp_config).await.expect("IDP admin initialization failed");
     run(
-        config.app_url,
-        config.issuer,
-        config.client_id,
-        Some(config.client_secret),
+        idp_admin,
     )
     .await;
 }

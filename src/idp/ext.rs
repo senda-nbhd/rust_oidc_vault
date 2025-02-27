@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -46,6 +46,9 @@ pub struct IdpRole {
 /// Error types for identity provider operations
 #[derive(Debug, Error, Clone)]
 pub enum IdpError {
+    #[error("Oidc Error {0}")]
+    OidcError(#[from] Arc<axum_oidc::error::Error>),
+
     #[error("Authentication failed: {0}")]
     AuthenticationError(String),
 
@@ -70,6 +73,8 @@ pub enum IdpError {
 pub trait IdentityProvider: Send + Sync {
     /// Initialize the identity provider with configuration
     async fn initialize(&mut self) -> Result<(), IdpError>;
+
+    fn issuer(&self) -> String;
 
     /// Get all users from the identity provider
     async fn get_users(&self) -> Result<Vec<IdpUser>, IdpError>;

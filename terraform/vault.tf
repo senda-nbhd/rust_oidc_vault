@@ -46,9 +46,14 @@ resource "vault_kv_secret_v2" "app_oidc_config" {
   delete_all_versions = true
   data_json = jsonencode({
     app_url       = local.app_url,
-    issuer        = format("http://keycloak:8080/realms/%s", keycloak_realm.realm.id)
+    provider_type = "keycloak"
+    base_url      = keycloak.url,
+    realm         = keycloak_realm.realm.id,
+    issuer        = format("%s/realms/%s", keycloak.url, keycloak_realm.realm.id)
     client_id     = keycloak_openid_client.app_client.client_id
     client_secret = keycloak_openid_client.app_client.client_secret
+    admin_username = keycloak.username,
+    admin_password = keycloak.password,
   })
 }
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::{extract::{FromRef, FromRequestParts}, http::request::Parts};
+use axum::{extract::FromRequestParts, http::request::Parts};
 use axum_oidc::{error::ExtractorError, EmptyAdditionalClaims, OidcClaims};
 use reqwest::StatusCode;
 
@@ -11,16 +11,16 @@ pub struct Identity(pub AiclIdentity);
 
 impl<S> FromRequestParts<S> for Identity
 where
-    Arc<IdpAdmin>: FromRef<S>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, String);
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
+        let idp_admin = parts.extensions.get::<Arc<IdpAdmin>>()
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "IdpAdmin not found".to_string()))?;
 
         match parts.extensions.get::<Result<OidcClaims<EmptyAdditionalClaims>, ExtractorError>>() {
             Some(Ok(claims)) => {
-                let idp_admin = Arc::from_ref(state);
                 // Extract user ID from subject
                 let user_id = claims.subject().parse()
                     .map_err(|e| {
@@ -55,16 +55,16 @@ pub struct OptionalIdentity(pub Option<AiclIdentity>);
 
 impl<S> FromRequestParts<S> for OptionalIdentity
 where
-    Arc<IdpAdmin>: FromRef<S>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, String);
 
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
+        let idp_admin = parts.extensions.get::<Arc<IdpAdmin>>()
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "IdpAdmin not found".to_string()))?;
         // Try to extract OIDC claims, but don't fail if they're not there
         match parts.extensions.get::<Result<OidcClaims<EmptyAdditionalClaims>, ExtractorError>>() {
             Some(Ok(claims)) => {
-                let idp_admin = Arc::from_ref(state);
                 // Extract user ID from subject
                 let user_id = match claims.subject().parse() {
                     Ok(id) => id,

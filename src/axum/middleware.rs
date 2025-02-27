@@ -23,9 +23,7 @@ impl<S: Clone> Clone for IdentifierService<S> {
 
 impl<B, S> Service<Request<B>> for IdentifierService<S>
 where
-    S: Service<Request<B>, Response = Response> + Send + Clone + 'static,
-    S::Future: Send + 'static,
-    B: Send + Sync + 'static,
+    S: Service<Request<B>, Response = Response> + Send + 'static,
 {
     type Response = Response;
     type Error = S::Error;
@@ -42,7 +40,7 @@ where
 }
 
 pub struct IdentifierLayer {
-    identifier: Arc<IdpAdmin>,
+    pub(crate) identifier: Arc<IdpAdmin>,
 }
 
 impl Clone for IdentifierLayer {
