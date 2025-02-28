@@ -75,16 +75,6 @@ struct ClientRoleMapping {
     pub mappings: Vec<KeycloakRole>,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct KeycloakClient {
-    pub id: String,
-    pub client_id: String,
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub enabled: bool,
-}
-
 pub struct KeycloakProvider {
     client: Client,
     base_url: String,

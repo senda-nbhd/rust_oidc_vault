@@ -1,8 +1,6 @@
-use axum::http::Uri;
-use axum_oidc::{EmptyAdditionalClaims, OidcAuthLayer, OidcClaims};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use vaultrs::client::{VaultClient, VaultClientSettings, VaultClientSettingsBuilder};
+use vaultrs::client::{VaultClient, VaultClientSettingsBuilder};
 use vaultrs::error::ClientError;
 use vaultrs::kv2;
 
@@ -42,14 +40,6 @@ pub struct VaultService {
     config: VaultConfig,
 }
 
-#[derive(Deserialize, Debug)]
-struct OidcConfig {
-    app_url: String,
-    issuer: String,
-    client_id: String,
-    client_secret: String,
-}
-
 impl VaultService {
     pub async fn from_env() -> Result<Self, VaultError> {
         let address = std::env::var("VAULT_ADDR").ok().unwrap();
@@ -72,7 +62,10 @@ impl VaultService {
 
         let client = VaultClient::new(settings)?;
 
-        Ok(Self { client, config: config })
+        Ok(Self {
+            client,
+            config: config,
+        })
     }
 
     pub async fn get_idp_config_from_vault(&self) -> Result<IdpConfig, VaultError> {

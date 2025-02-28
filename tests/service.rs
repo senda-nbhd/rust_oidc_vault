@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use aicl_oidc::{axum::extractors::OptionalIdentity, idp::admin::IdpAdmin, vault::VaultService};
+use aicl_oidc::{axum::extractors::OptionalIdentity, idp::admin::IdpAdmin, AiclIdentity};
 use axum::{
     error_handling::HandleErrorLayer, http::Uri, response::IntoResponse, routing::get, Router,
 };
@@ -17,8 +17,6 @@ use tower_sessions::{
     cookie::{time::Duration, SameSite},
     Expiry, MemoryStore, SessionManagerLayer,
 };
-
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 pub async fn run(idp: Arc<IdpAdmin>) {
     let session_store = MemoryStore::default();
@@ -87,11 +85,15 @@ pub async fn run(idp: Arc<IdpAdmin>) {
         .unwrap();
 }
 
-async fn authenticated(claims: OidcClaims<EmptyAdditionalClaims>) -> impl IntoResponse {
+#[axum::debug_handler]
+async fn authenticated(
+    user: AiclIdentity,
+    claims: OidcClaims<EmptyAdditionalClaims>,
+) -> impl IntoResponse {
     format!(
         "Hello {}, {}",
         claims.subject().as_str(),
-        serde_json::to_string_pretty(&claims.additional_claims()).unwrap()
+        serde_json::to_string_pretty(&user).unwrap()
     )
 }
 
@@ -116,32 +118,4 @@ async fn maybe_authenticated(
 
 async fn logout(logout: OidcRpInitiatedLogout) -> impl IntoResponse {
     logout.with_post_logout_redirect(Uri::from_static("/"))
-}
-
-#[tokio::main]
-async fn main() {
-    dotenvy::dotenv().ok();
-
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_target(true))
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-            // Default filter if RUST_LOG is not set
-            // Set to info level for everything except hyper
-            "trace,hyper=off".into()
-        }))
-        .init();
-
-    // Log application startup
-    tracing::info!("Starting OIDC application");
-    let vault = VaultService::from_env()
-        .await
-        .expect("Vault service initialization failed");
-    let idp_config = vault
-        .get_idp_config_from_vault()
-        .await
-        .expect("Failed to get IDP config from Vault");
-    let idp_admin = IdpAdmin::new(idp_config)
-        .await
-        .expect("IDP admin initialization failed");
-    run(idp_admin).await;
 }

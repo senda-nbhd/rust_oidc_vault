@@ -1,6 +1,5 @@
 use atomic_time::AtomicInstant;
 use axum::http::Uri;
-use axum_oidc::{EmptyAdditionalClaims, OidcAuthLayer};
 use moka::future::{Cache, CacheBuilder};
 use std::{
     sync::{atomic::Ordering, Arc},
@@ -8,7 +7,9 @@ use std::{
 };
 use uuid::Uuid;
 
-use crate::{axum::middleware::IdentifierLayer, AiclIdentity, InstitutionIdentity, Role, TeamIdentity};
+use crate::{
+    AiclIdentity, InstitutionIdentity, Role, TeamIdentity,
+};
 
 use super::{
     ext::{IdentityProvider, IdpConfig, IdpError, IdpGroup, IdpGroupHeader, IdpRole, IdpUser},
@@ -52,7 +53,6 @@ impl IdpAdmin {
                 )))
             }
         };
-
 
         provider.initialize().await?;
         let groups = provider.get_groups().await?;
@@ -110,23 +110,6 @@ impl IdpAdmin {
             user_roles,
             comprehensive_report,
         }))
-    }
-
-    pub async fn oidc_auth_layer(&self, app_url: String) -> Result<OidcAuthLayer::<EmptyAdditionalClaims>, IdpError> {
-        Ok(OidcAuthLayer::<EmptyAdditionalClaims>::discover_client(
-            Uri::from_maybe_shared(app_url).expect("valid APP_URL"),
-            self.provider.issuer(),
-            self.config.client_id.clone(),
-            self.config.client_secret.clone(),
-            vec![],
-        )
-        .await.map_err(Arc::new)?)
-    }
-
-    pub fn layer(self: &Arc<Self>) -> IdentifierLayer {
-        IdentifierLayer {
-            identifier: self.clone(),
-        }
     }
 
     /// Get a specific user by ID with caching
@@ -307,7 +290,10 @@ impl IdpAdmin {
         })
     }
 
-    pub async fn get_domain_user(self: &Arc<Self>, user_id: Uuid) -> Result<AiclIdentity, IdpError> {
+    pub async fn get_domain_user(
+        self: &Arc<Self>,
+        user_id: Uuid,
+    ) -> Result<AiclIdentity, IdpError> {
         let user = self.get_user(user_id).await?;
         self.to_domain_user(&user).await
     }

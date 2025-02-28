@@ -6,47 +6,47 @@ use reqwest::StatusCode;
 
 use crate::{idp::admin::IdpAdmin, AiclIdentity};
 
-/// Extractor for AiclIdentity
-pub struct Identity(pub AiclIdentity);
-
-impl<S> FromRequestParts<S> for Identity
+impl<S> FromRequestParts<S> for AiclIdentity
 where
     S: Send + Sync,
 {
     type Rejection = (StatusCode, String);
 
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
-        let idp_admin = parts.extensions.get::<Arc<IdpAdmin>>()
-            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "IdpAdmin not found".to_string()))?;
+        let idp_admin = parts.extensions.get::<Arc<IdpAdmin>>().ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "IdpAdmin not found".to_string(),
+        ))?;
 
-        match parts.extensions.get::<Result<OidcClaims<EmptyAdditionalClaims>, ExtractorError>>() {
-            Some(Ok(claims)) => {
+        match parts.extensions.get::<OidcClaims<EmptyAdditionalClaims>>() {
+            Some(claims) => {
                 // Extract user ID from subject
-                let user_id = claims.subject().parse()
-                    .map_err(|e| {
-                        tracing::error!("Failed to parse user id: {}", e);
-                        (StatusCode::BAD_REQUEST, format!("Invalid user ID: {}", e))
-                    })?;
-                
+                let user_id = claims.subject().parse().map_err(|e| {
+                    tracing::error!("Failed to parse user id: {}", e);
+                    (StatusCode::BAD_REQUEST, format!("Invalid user ID: {}", e))
+                })?;
+
                 // Get user from IdpAdmin
-                let user = idp_admin.get_user(user_id).await
-                    .map_err(|e| {
-                        tracing::error!("Failed to get user idp: {}", e);
-                        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get user: {}", e))
-                    })?;
-                
+                let user = idp_admin.get_user(user_id).await.map_err(|e| {
+                    tracing::error!("Failed to get user idp: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to get user: {}", e),
+                    )
+                })?;
+
                 // Convert to AiclIdentity
-                let identity = idp_admin.to_domain_user(&user).await
-                    .map_err(|e| {
-                        tracing::error!("Failed to convert user: {}", e);
-                        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to convert user: {}", e))
-                    })?;
-                Ok(Identity(identity))
-            },
-            Some(Err(e)) => Err((StatusCode::UNAUTHORIZED, format!("Not authenticated: {}", e))),
+                let identity = idp_admin.to_domain_user(&user).await.map_err(|e| {
+                    tracing::error!("Failed to convert user: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to convert user: {}", e),
+                    )
+                })?;
+                Ok(identity)
+            }
             None => Err((StatusCode::UNAUTHORIZED, format!("Missing Authentication"))),
         }
-        
     }
 }
 
@@ -60,11 +60,13 @@ where
     type Rejection = (StatusCode, String);
 
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
-        let idp_admin = parts.extensions.get::<Arc<IdpAdmin>>()
-            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "IdpAdmin not found".to_string()))?;
+        let idp_admin = parts.extensions.get::<Arc<IdpAdmin>>().ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "IdpAdmin not found".to_string(),
+        ))?;
         // Try to extract OIDC claims, but don't fail if they're not there
-        match parts.extensions.get::<Result<OidcClaims<EmptyAdditionalClaims>, ExtractorError>>() {
-            Some(Ok(claims)) => {
+        match parts.extensions.get::<OidcClaims<EmptyAdditionalClaims>>() {
+            Some(claims) => {
                 // Extract user ID from subject
                 let user_id = match claims.subject().parse() {
                     Ok(id) => id,
@@ -73,7 +75,7 @@ where
                         return Ok(OptionalIdentity(None));
                     }
                 };
-                
+
                 // Get user from IdpAdmin
                 let user = match idp_admin.get_user(user_id).await {
                     Ok(user) => user,
@@ -82,7 +84,7 @@ where
                         return Ok(OptionalIdentity(None));
                     }
                 };
-                
+
                 // Convert to AiclIdentity
                 let identity = match idp_admin.to_domain_user(&user).await {
                     Ok(user) => user,
@@ -92,8 +94,7 @@ where
                     }
                 };
                 Ok(OptionalIdentity(Some(identity)))
-            },
-            Some(Err(_)) => Ok(OptionalIdentity(None)),
+            }
             None => Ok(OptionalIdentity(None)),
         }
     }

@@ -72,7 +72,7 @@ module "users" {
       username   = "admin1"
       email      = "admin1@test.com"
       first_name = "Charles"
-      last_name  = ""
+      last_name  = "Student"
       password   = "admin"
       roles      = ["CAPTAIN"]
       team       = "Team1"
@@ -82,7 +82,7 @@ module "users" {
       username   = "member1"
       email      = "member1@test.com"
       first_name = "Mike"
-      last_name  = ""
+      last_name  = "Student"
       password   = "member"
       roles      = ["STUDENT"]
       team       = "Team1"
@@ -92,7 +92,7 @@ module "users" {
       username   = "viewer1"
       email      = "viewer1@test.com"
       first_name = "Smith"
-      last_name  = ""
+      last_name  = "Student"
       password   = "viewer"
       roles      = ["SPECTATOR"]
       team       = "Team1"
@@ -102,7 +102,7 @@ module "users" {
       username   = "admin2"
       email      = "admin2@test.com"
       first_name = "Clara"
-      last_name  = ""
+      last_name  = "Student"
       password   = "admin"
       roles      = ["CAPTAIN"]
       team       = "Team2"
@@ -112,7 +112,7 @@ module "users" {
       username   = "member2"
       email      = "member2@test.com"
       first_name = "Megan"
-      last_name  = ""
+      last_name  = "Student"
       password   = "member"
       roles      = ["STUDENT"]
       team       = "Team2"
@@ -122,7 +122,7 @@ module "users" {
       username   = "viewer2"
       email      = "viewer2@test.com"
       first_name = "Stephanie"
-      last_name  = ""
+      last_name  = "Student"
       password   = "viewer"
       roles      = ["SPECTATOR"]
       team       = "Team2"
@@ -133,7 +133,7 @@ module "users" {
       username   = "admin3"
       email      = "admin3@test.com"
       first_name = "Clara"
-      last_name  = ""
+      last_name  = "Student"
       password   = "admin"
       roles      = ["CAPTAIN"]
       team       = "Team3"
@@ -143,7 +143,7 @@ module "users" {
       username   = "member3"
       email      = "member3@test.com"
       first_name = "Megan"
-      last_name  = ""
+      last_name  = "Student"
       password   = "member"
       roles      = ["STUDENT"]
       team       = "Team3"
@@ -153,7 +153,7 @@ module "users" {
       username   = "viewer3"
       email      = "viewer3@test.com"
       first_name = "Stephanie"
-      last_name  = ""
+      last_name  = "Student"
       password   = "viewer"
       roles      = ["SPECTATOR"]
       team       = "Team3"
@@ -164,7 +164,7 @@ module "users" {
       username   = "advisor1"
       email      = "advisor1@school1.org"
       first_name = "Advisor"
-      last_name  = ""
+      last_name  = "Advisor"
       password   = "admin"
       roles      = ["ADVISOR"]
       team       = null
@@ -174,7 +174,7 @@ module "users" {
       username   = "advisor2"
       email      = "advisor2@school2.org"
       first_name = "Advisor"
-      last_name  = ""
+      last_name  = "Advisor"
       password   = "admin"
       roles      = ["ADVISOR"]
       team       = null
@@ -186,7 +186,7 @@ module "users" {
       username   = "root"
       email      = "root@competition.org"
       first_name = "Admin"
-      last_name  = ""
+      last_name  = "Admin"
       password   = "admin"
       roles      = ["ROOT"]
       team       = null
@@ -196,7 +196,7 @@ module "users" {
       username   = "root2"
       email      = "root2@competition.org"
       first_name = "Super"
-      last_name  = ""
+      last_name  = "Admin"
       password   = "admin"
       roles      = ["ROOT"]
       team       = null
@@ -206,7 +206,7 @@ module "users" {
       username   = "viewer_global"
       email      = "viewer@competition.org"
       first_name = "View"
-      last_name  = ""
+      last_name  = "View"
       password   = "admin"
       roles      = ["VIEWER"]
       team       = null
@@ -216,7 +216,7 @@ module "users" {
       username   = "viewer_global2"
       email      = "viewer2@competition.org"
       first_name = "Read"
-      last_name  = ""
+      last_name  = "View"
       password   = "admin"
       roles      = ["VIEWER"]
       team       = null

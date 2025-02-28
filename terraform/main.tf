@@ -19,11 +19,13 @@ locals {
   keycloak_user = "root"
   keycloak_password = "root"
   app_url = "http://localhost:4040"
+  keycloak_url = "http://keycloak:8080"
+  vault_url = "http://vault:8200"
 }
 
 provider "vault" {
   // see docker-compose.yml
-  address = "http://vault:8200"
+  address = local.vault_url
   token   = local.vault_root_token
 }
 
@@ -33,5 +35,5 @@ provider "keycloak" {
   password  = local.keycloak_password
   base_path = ""
   // see docker-compose.yml
-  url       = "http://keycloak:8080"
+  url       = local.keycloak_url
 }

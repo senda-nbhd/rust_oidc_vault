@@ -1,6 +1,5 @@
 use crate::idp::ext::IdpError;
 
-
 #[derive(Debug, thiserror::Error)]
 pub enum IdentifierError {
     #[error("Invalid uuid: {0}")]
