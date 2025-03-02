@@ -7,9 +7,7 @@ use std::{
 };
 use uuid::Uuid;
 
-use crate::{
-    AiclIdentity, InstitutionIdentity, Role, TeamIdentity,
-};
+use crate::{AiclIdentity, InstitutionIdentity, Role, TeamIdentity};
 
 use super::{
     ext::{IdentityProvider, IdpConfig, IdpError, IdpGroup, IdpGroupHeader, IdpRole, IdpUser},
