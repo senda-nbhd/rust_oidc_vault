@@ -93,6 +93,7 @@ async fn main() {
         .get_idp_config_from_vault()
         .await
         .expect("Failed to get IDP config from Vault");
+    let client_secret = idp_config.client_secret.clone();
     let idp_admin = IdpAdmin::new(idp_config)
         .await
         .expect("IDP admin initialization failed");
@@ -102,7 +103,7 @@ async fn main() {
         "http://keycloak:8080/realms/app-realm".to_string(), // Issuer
         "rust-app".to_string(),              // Client ID
     )
-    .with_client_secret(Some("test-client-secret".to_string()))
+    .with_client_secret(client_secret)
     .with_scopes(vec![
         "openid".to_string(),
         "profile".to_string(),

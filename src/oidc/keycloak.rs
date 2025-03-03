@@ -10,9 +10,9 @@ use openidconnect::{
         CoreSubjectIdentifierType, CoreTokenIntrospectionResponse, CoreTokenType,
     },
     AccessToken, Client, ClientId, ClientSecret, CsrfToken, EmptyAdditionalClaims,
-    EmptyAdditionalProviderMetadata, EmptyExtraTokenFields, EndpointMaybeSet, EndpointNotSet,
+    AdditionalProviderMetadata, EmptyExtraTokenFields, EndpointMaybeSet, EndpointNotSet,
     EndpointSet, IdToken, IdTokenFields, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeVerifier,
-    ProviderMetadata, RedirectUrl, RefreshToken, StandardErrorResponse, StandardTokenResponse,
+    ProviderMetadata, RefreshToken, StandardErrorResponse, StandardTokenResponse,
     TokenResponse,
 };
 use serde::{Deserialize, Serialize};
@@ -24,8 +24,16 @@ use crate::idp::{admin::IdpAdmin, keycloak::KeycloakProvider};
 
 use super::ext::OidcError;
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct KeycloakProviderMetadata {
+    issuer: IssuerUrl,
+    end_session_endpoint: Url,
+}
+
+impl AdditionalProviderMetadata for KeycloakProviderMetadata {}
+
 pub type KeycloakMetadata = ProviderMetadata<
-    EmptyAdditionalProviderMetadata,
+    KeycloakProviderMetadata,
     CoreAuthDisplay,
     CoreClientAuthMethod,
     CoreClaimName,
@@ -140,6 +148,7 @@ impl KeycloakOidcBuilder {
             .build()?;
         let issuer_url = IssuerUrl::new(self.issuer)?;
         let provider_metadata = KeycloakMetadata::discover_async(issuer_url, &http_client).await?;
+        let end_session_endpoint = provider_metadata.additional_metadata().end_session_endpoint.clone();
         let client_id = ClientId::new(self.client_id.clone());
         let client_secret = self.client_secret.map(ClientSecret::new);
         let oidc_client =
@@ -147,6 +156,7 @@ impl KeycloakOidcBuilder {
         let application_base_url = Url::parse(&self.application_base_url)?;
         Ok(KeycloakOidcProvider {
             application_base_url,
+            end_session_endpoint,
             http_client,
             oidc_client,
             scopes: self.scopes,
@@ -157,6 +167,7 @@ impl KeycloakOidcBuilder {
 
 pub struct KeycloakOidcProvider {
     application_base_url: Url,
+    end_session_endpoint: Url,
     oidc_client: KeycloakOidcClient,
     http_client: reqwest::Client,
     scopes: Vec<String>,
@@ -417,6 +428,7 @@ mod tests {
             service_account_key_path: None,
             domain: None,
         };
+        let client_secret = idp_config.client_secret.clone();
 
         // Create the IdpAdmin
         let idp_admin = crate::idp::admin::IdpAdmin::new(idp_config)
@@ -430,7 +442,7 @@ mod tests {
             "http://keycloak:8080/realms/app-realm".to_string(), // Issuer
             "rust-app".to_string(),              // Client ID
         )
-        .with_client_secret(Some("test-client-secret".to_string()))
+        .with_client_secret(client_secret)
         .with_scopes(vec![
             "openid".to_string(),
             "profile".to_string(),
