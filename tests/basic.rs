@@ -1,6 +1,8 @@
 mod service;
 
-use aicl_oidc::{idp::admin::IdpAdmin, vault::VaultService};
+use std::sync::Arc;
+
+use aicl_oidc::{idp::admin::IdpAdmin, oidc::keycloak::KeycloakOidcBuilder, vault::VaultService};
 use headless_chrome::{Browser, Tab};
 use tokio::task::JoinHandle;
 
@@ -42,7 +44,22 @@ async fn start_application() -> JoinHandle<()> {
     let idp_admin = IdpAdmin::new(idp_config)
         .await
         .expect("IDP admin initialization failed");
-    tokio::spawn(service::run(idp_admin))
+    let oidc_provider = KeycloakOidcBuilder::new(
+        idp_admin,
+        "http://localhost:4040".to_string(), // Application base URL
+        "http://keycloak:8080/realms/app-realm".to_string(), // Issuer
+        "rust-app".to_string(),              // Client ID
+    )
+    .with_client_secret(Some("test-client-secret".to_string()))
+    .with_scopes(vec![
+        "openid".to_string(),
+        "profile".to_string(),
+        "email".to_string(),
+    ])
+    .build()
+    .await
+    .expect("Failed to build KeycloakOidcProvider");
+    tokio::spawn(service::run(Arc::new(oidc_provider)))
 }
 
 // Tests the authentication flow using a headless browser

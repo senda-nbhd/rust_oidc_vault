@@ -1,4 +1,3 @@
-
 use thiserror::Error;
 
 /// Error types for OIDC operations

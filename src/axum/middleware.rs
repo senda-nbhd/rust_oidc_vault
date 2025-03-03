@@ -1,12 +1,16 @@
-use axum::{extract::Query, http::{Request, Uri}, response::{IntoResponse, Redirect, Response}};
+use axum::{
+    extract::Query,
+    http::{Request, Uri},
+    response::{IntoResponse, Redirect, Response},
+};
 use futures_util::{future::BoxFuture, FutureExt};
 use serde::Deserialize;
-use tower_sessions::Session;
 use std::{
     sync::Arc,
     task::{Context, Poll},
 };
 use tower::{Layer, Service};
+use tower_sessions::Session;
 
 use crate::{oidc::keycloak::KeycloakOidcProvider, AiclIdentity};
 
@@ -60,7 +64,7 @@ where
 }
 
 pub struct AuthenticateLayer {
-    pub(crate) identifier: Arc<KeycloakOidcProvider>,
+    pub identifier: Arc<KeycloakOidcProvider>,
 }
 
 impl Clone for AuthenticateLayer {
@@ -84,14 +88,25 @@ impl<S: Clone> Layer<S> for AuthenticateLayer {
 
 /// Layer that applies the login enforcer middleware
 pub struct LoginEnforcerLayer {
-    identifier: Arc<KeycloakOidcProvider>,
+    pub identifier: Arc<KeycloakOidcProvider>,
+}
+
+impl Clone for LoginEnforcerLayer {
+    fn clone(&self) -> Self {
+        Self {
+            identifier: self.identifier.clone(),
+        }
+    }
 }
 
 impl<S> tower::Layer<S> for LoginEnforcerLayer {
     type Service = LoginEnforcerMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        LoginEnforcerMiddleware { identifier: self.identifier.clone(), inner }
+        LoginEnforcerMiddleware {
+            identifier: self.identifier.clone(),
+            inner,
+        }
     }
 }
 
@@ -99,6 +114,15 @@ impl<S> tower::Layer<S> for LoginEnforcerLayer {
 pub struct LoginEnforcerMiddleware<S> {
     identifier: Arc<KeycloakOidcProvider>,
     inner: S,
+}
+
+impl<S: Clone> Clone for LoginEnforcerMiddleware<S> {
+    fn clone(&self) -> Self {
+        Self {
+            identifier: self.identifier.clone(),
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -117,7 +141,9 @@ where
 {
     type Response = Response;
     type Error = S::Error;
-    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
 
     fn poll_ready(
         &mut self,
@@ -127,16 +153,12 @@ where
     }
 
     fn call(&mut self, req: Request<B>) -> Self::Future {
-        
-
         // Clone the inner service
         let mut inner = self.inner.clone();
 
         // Check if the user is identified, and return if they are.
         if let Some(_) = req.extensions().get::<AiclIdentity>() {
-            return async move {
-                inner.call(req).await
-            }.boxed()
+            return async move { inner.call(req).await }.boxed();
         }
         // They aren't identified. Get the session and create a redirect URI to send them to the oidc login page.
         let identifier = self.identifier.clone();
@@ -153,8 +175,11 @@ where
 
         if let Some(Query(query)) = Query::<OidcQuery>::try_from_uri(&uri).ok() {
             return Box::pin(async move {
-                match identifier.handle_callback(&query.code, &query.state, &session, &redirect).await {
-                    Ok(auth_uri) => Ok(Redirect::to(&redirect.to_string()).into_response()),
+                match identifier
+                    .handle_callback(&query.code, &query.state, &session, &redirect)
+                    .await
+                {
+                    Ok(()) => Ok(Redirect::to(&redirect.to_string()).into_response()),
                     Err(e) => {
                         tracing::error!("Failed to start authentication: {}", e);
                         Ok(axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response())
@@ -176,7 +201,7 @@ where
 }
 
 /// Strips OIDC-related parameters from a URI
-/// 
+///
 /// Removes 'code', 'state', 'session_state', and other OIDC-related query parameters
 fn strip_oidc_params(uri: &Uri) -> Uri {
     // If there's no query string, just return the original URI
@@ -231,29 +256,4 @@ fn strip_oidc_params(uri: &Uri) -> Uri {
     }
 
     parts.parse().unwrap_or_else(|_| uri.clone())
-}
-
-/// Cleans a URI for use as a post-login redirect target
-fn clean_redirect_uri(uri: &Uri, default_path: &str) -> String {
-    // List of paths that we should never redirect back to
-    let excluded_paths = [
-        "/login",
-        "/logout",
-        "/auth/callback",
-        "/auth/refresh",
-        "/auth",
-    ];
-
-    let path = uri.path();
-    
-    // Check if this is an excluded path
-    if excluded_paths.iter().any(|&excluded| path.starts_with(excluded)) {
-        return default_path.to_string();
-    }
-
-    // Strip any OIDC params
-    let cleaned_uri = strip_oidc_params(uri);
-    
-    // Return the cleaned URI as a string
-    cleaned_uri.to_string()
 }
