@@ -5,7 +5,7 @@ use aicl_oidc::{
         extractors::OptionalIdentity,
         middleware::{AuthenticateLayer, LoginEnforcerLayer},
     },
-    oidc::keycloak::KeycloakOidcProvider,
+    oidc::{keycloak::KeycloakOidcProvider, logout::LogoutService},
     AiclIdentity,
 };
 use axum::{
@@ -31,12 +31,15 @@ pub async fn run(identifier: Arc<KeycloakOidcProvider>) {
     let login_layer = LoginEnforcerLayer {
         identifier: identifier.clone(),
     };
+    let logout_service = LogoutService {
+        identifier: identifier.clone(),
+    };
 
     let app: Router<()> = Router::new();
 
     let app = app
         .route("/foo", get(authenticated))
-        .route("/logout", get(logout))
+        .route_service("/logout", logout_service)
         .layer(login_layer)
         .route("/bar", get(maybe_authenticated))
         .layer(auth_layer)
@@ -63,8 +66,4 @@ async fn maybe_authenticated(OptionalIdentity(maybe_user): OptionalIdentity) -> 
             format!("Hello anon!")
         }
     }
-}
-
-async fn logout() -> impl IntoResponse {
-    todo!()
 }

@@ -26,7 +26,6 @@ use super::ext::OidcError;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KeycloakProviderMetadata {
-    issuer: IssuerUrl,
     end_session_endpoint: Url,
 }
 
@@ -376,11 +375,11 @@ impl KeycloakOidcProvider {
     }
 
     pub async fn logout(&self, session: &Session) -> Result<axum::http::Uri, OidcError> {
-        // Get token before removing it (we might need the ID token for backchannel logout)
+        // Get token before removing it (we need the ID token for backchannel logout)
         let token: Option<KeyCloakToken> = session.get(TOKEN_KEY).await.map_err(|e| {
             OidcError::SessionError(format!("Failed to get token from session: {}", e))
         })?;
-
+    
         // Clear OIDC session data
         session
             .remove::<AiclOidcSession>(SESSION_KEY)
@@ -388,18 +387,34 @@ impl KeycloakOidcProvider {
             .map_err(|e| {
                 OidcError::SessionError(format!("Failed to remove session data: {}", e))
             })?;
-
+    
         session
             .remove::<KeyCloakToken>(TOKEN_KEY)
             .await
             .map_err(|e| OidcError::SessionError(format!("Failed to remove token data: {}", e)))?;
-
+    
+        session
+            .remove::<RefreshToken>(REFRESH_KEY)
+            .await
+            .map_err(|e| OidcError::SessionError(format!("Failed to remove refresh token: {}", e)))?;
+    
         // Create a redirect URL to the Keycloak end session endpoint if available
         if let Some(token) = token {
             // Build the end_session_endpoint URL with ID token hint and post_logout_redirect_uri
-            todo!("The 'EmptyAdditionalProviderMetadata' should be replaced with metadata that indicates where the end_session_endpoint is located. This could be done by adding additional provider metadata in the KeycloakOidcProvider struct.");
+            let mut end_session_url = self.end_session_endpoint.clone();
+            
+            // Add ID token hint parameter
+            let id_token_str = token.id_token.to_string();
+            end_session_url.query_pairs_mut().append_pair("id_token_hint", &id_token_str);
+            
+            // Add post_logout_redirect_uri parameter
+            let redirect_uri = self.application_base_url.to_string();
+            end_session_url.query_pairs_mut().append_pair("post_logout_redirect_uri", &redirect_uri);
+            
+            return Ok(axum::http::Uri::from_maybe_shared(end_session_url.to_string())
+                .map_err(|e| OidcError::Unknown(format!("Invalid logout URL: {}", e)))?);
         }
-
+    
         // If we don't have a token or end_session_endpoint, just return to the application root
         Ok(axum::http::Uri::from_static("/"))
     }
