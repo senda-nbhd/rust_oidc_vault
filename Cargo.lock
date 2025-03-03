@@ -52,6 +52,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tracing-test",
+ "url",
  "uuid",
  "vaultrs",
 ]

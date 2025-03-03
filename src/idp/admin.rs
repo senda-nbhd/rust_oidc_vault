@@ -1,5 +1,4 @@
 use atomic_time::AtomicInstant;
-use axum::http::Uri;
 use moka::future::{Cache, CacheBuilder};
 use std::{
     sync::{atomic::Ordering, Arc},
@@ -14,9 +13,9 @@ use super::{
     keycloak::KeycloakProvider,
 };
 
-pub struct IdpAdmin {
+pub struct IdpAdmin<IdentityProvider> {
     config: IdpConfig,
-    provider: Box<dyn IdentityProvider>,
+    provider: IdentityProvider,
     teams_group_id: Uuid,
     institutions_group_id: Uuid,
     // Cache for user data by user ID
@@ -40,7 +39,7 @@ pub struct IdpAdmin {
     comprehensive_report: Cache<(), Result<Vec<IdpUser>, IdpError>>,
 }
 
-impl IdpAdmin {
+impl IdpAdmin<KeycloakProvider> {
     pub async fn new(config: IdpConfig) -> Result<Arc<Self>, IdpError> {
         let mut provider = match config.provider_type.as_str() {
             "keycloak" => KeycloakProvider::new(&config)?,
@@ -94,7 +93,7 @@ impl IdpAdmin {
 
         Ok(Arc::new(IdpAdmin {
             config,
-            provider: Box::new(provider),
+            provider,
             teams_group_id,
             institutions_group_id,
             all_users_call,

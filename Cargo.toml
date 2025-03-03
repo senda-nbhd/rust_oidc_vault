@@ -28,11 +28,9 @@ futures-util = "0.3.31"
 anyhow = { version = "1.0.96", features = ["backtrace"] }
 tower-sessions-moka-store = "0.15.0"
 tower-sessions-sqlx-store = { version = "0.15.0", features = ["postgres"] }
+url = "2.5.4"
 
 [dev-dependencies]
 headless_chrome = "1.0.17"
 tracing-test = "0.2.5"
 
-[[example]]
-name = "main"
-test = false

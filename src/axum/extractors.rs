@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use axum::{extract::FromRequestParts, http::request::Parts};
-use axum_oidc::{error::ExtractorError, EmptyAdditionalClaims, OidcClaims};
 use reqwest::StatusCode;
 
 use crate::{idp::admin::IdpAdmin, AiclIdentity};
