@@ -5,7 +5,7 @@ use axum::{
 use std::fmt;
 use thiserror::Error;
 
-use crate::{idp::ext::IdpError, oidc::ext::OidcError};
+use crate::{idp::ext::IdpError, oidc::ext::OidcError, vault::VerificationError};
 
 // Existing identifier error
 #[derive(Debug, Error)]
@@ -26,6 +26,9 @@ pub enum AppError {
 
     #[error("Authorization error: {0}")]
     Authorization(String),
+
+    #[error("Token verification failed: {0}")]
+    VerificationError(#[from] VerificationError),
 
     #[error("Identity provider error: {0}")]
     IdentityProvider(#[from] IdpError),
@@ -58,6 +61,7 @@ impl AppError {
     pub fn status_code(&self) -> StatusCode {
         match self {
             Self::Authentication(_) => StatusCode::UNAUTHORIZED,
+            Self::VerificationError(_) => StatusCode::UNAUTHORIZED,
             Self::Authorization(_) => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,

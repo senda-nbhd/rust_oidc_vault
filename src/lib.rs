@@ -81,6 +81,7 @@ pub struct AiclIdentity {
 pub struct AiclIdentifier {
     vault_service: Arc<VaultService>,
     oidc_provider: Arc<KeycloakOidcProvider>,
+    idp_admin: Arc<IdpAdmin>,
 }
 
 impl AiclIdentifier {
@@ -97,7 +98,6 @@ impl AiclIdentifier {
             .await
             .with_context(|| "IDP admin initialization failed")?;
         let oidc_provider = Arc::new(KeycloakOidcBuilder::new(
-            idp_admin,
             "http://localhost:4040".to_string(), // Application base URL
             "http://keycloak:8080/realms/app-realm".to_string(), // Issuer
             "rust-app".to_string(),              // Client ID
@@ -112,12 +112,13 @@ impl AiclIdentifier {
         .await
         .with_context(|| "Failed to build KeycloakOidcProvider")?);
 
-        Ok(Self { oidc_provider, vault_service })
+        Ok(Self { oidc_provider, vault_service, idp_admin })
     }
     
     pub fn authenticate_layer(&self) -> AuthenticateLayer {
         AuthenticateLayer {
             identifier: self.oidc_provider.clone(),
+            idp: self.idp_admin.clone(),
         }
     }
 

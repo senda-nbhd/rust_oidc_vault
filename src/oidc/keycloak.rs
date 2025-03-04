@@ -93,7 +93,7 @@ pub struct AiclOidcSession {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct KeyCloakToken {
-    id_token: IdToken<
+    pub id_token: IdToken<
         EmptyAdditionalClaims,
         CoreGenderClaim,
         CoreJweContentEncryptionAlgorithm,
@@ -112,12 +112,10 @@ pub struct KeycloakOidcBuilder {
     client_id: String,
     client_secret: Option<String>,
     scopes: Vec<String>,
-    keycloak_idp: Arc<IdpAdmin<KeycloakProvider>>,
 }
 
 impl KeycloakOidcBuilder {
     pub fn new(
-        keycloak_idp: Arc<IdpAdmin<KeycloakProvider>>,
         application_base_url: String,
         issuer: String,
         client_id: String,
@@ -128,7 +126,6 @@ impl KeycloakOidcBuilder {
             client_id,
             client_secret: None,
             scopes: Vec::new(),
-            keycloak_idp,
         }
     }
 
@@ -159,7 +156,6 @@ impl KeycloakOidcBuilder {
             http_client,
             oidc_client,
             scopes: self.scopes,
-            keycloak_idp: self.keycloak_idp,
         })
     }
 }
@@ -170,7 +166,6 @@ pub struct KeycloakOidcProvider {
     oidc_client: KeycloakOidcClient,
     http_client: reqwest::Client,
     scopes: Vec<String>,
-    keycloak_idp: Arc<IdpAdmin<KeycloakProvider>>,
 }
 
 impl KeycloakOidcProvider {
@@ -201,6 +196,7 @@ impl KeycloakOidcProvider {
         &self,
         parts: &mut request::Parts,
         session: &Session,
+        idp: &Arc<IdpAdmin>
     ) -> Result<(), OidcError> {
         let login_session: Option<AiclOidcSession> =
             session.get(SESSION_KEY).await.map_err(|e| {
@@ -245,7 +241,7 @@ impl KeycloakOidcProvider {
                 })?;
 
                 // Get user from IdpAdmin
-                match self.keycloak_idp.get_domain_user(user_id).await {
+                match idp.get_domain_user(user_id).await {
                     Ok(identity) => {
                         // Insert the AiclIdentity into the request extensions
                         parts.extensions.insert(identity);
@@ -430,7 +426,7 @@ mod tests {
     use super::*;
 
     // Helper function to create a real KeycloakOidcProvider using the builder
-    async fn create_test_provider() -> KeycloakOidcProvider {
+    async fn create_test_provider() -> (KeycloakOidcProvider, Arc<IdpAdmin>) {
         // Create a real KeycloakProvider connected to the local docker-compose instance
         let idp_config = IdpConfig {
             provider_type: "keycloak".to_string(),
@@ -451,8 +447,7 @@ mod tests {
             .expect("Failed to create IdpAdmin");
 
         // Build the OIDC provider
-        KeycloakOidcBuilder::new(
-            idp_admin,
+        let provider = KeycloakOidcBuilder::new(
             "http://localhost:4040".to_string(), // Application base URL
             "http://keycloak:8080/realms/app-realm".to_string(), // Issuer
             "rust-app".to_string(),              // Client ID
@@ -465,12 +460,14 @@ mod tests {
         ])
         .build()
         .await
-        .expect("Failed to build KeycloakOidcProvider")
+        .expect("Failed to build KeycloakOidcProvider");
+
+        (provider, idp_admin)
     }
 
     #[tokio::test]
     async fn test_absolute_uri() {
-        let provider = create_test_provider().await;
+        let (provider,_) = create_test_provider().await;
         let uri: Uri = "https://example.com/path?query=value".parse().unwrap();
         let url = provider.uri_to_url(&uri).unwrap();
         assert_eq!(url.as_str(), "https://example.com/path?query=value");
@@ -478,7 +475,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_relative_uri_with_base() {
-        let provider = create_test_provider().await;
+        let (provider,_) = create_test_provider().await;
         let uri: Uri = "/path?query=value".parse().unwrap();
         let url = provider.uri_to_url(&uri).unwrap();
         assert_eq!(url.as_str(), "http://localhost:4040/path?query=value");
@@ -486,7 +483,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_path_only_uri() {
-        let provider = create_test_provider().await;
+        let (provider,_) = create_test_provider().await;
         let uri: Uri = "/some/path".parse().unwrap();
         let url = provider.uri_to_url(&uri).unwrap();
         assert_eq!(url.as_str(), "http://localhost:4040/some/path");
@@ -494,7 +491,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_uri() {
-        let provider = create_test_provider().await;
+        let (provider,_) = create_test_provider().await;
         let uri: Uri = "/".parse().unwrap();
         let url = provider.uri_to_url(&uri).unwrap();
         assert_eq!(url.as_str(), "http://localhost:4040/");
@@ -507,7 +504,7 @@ mod tests {
         let session = Session::new(None, session_store, None);
 
         // Create the provider
-        let provider = create_test_provider().await;
+        let (provider, idp) = create_test_provider().await;
 
         // Create a mock request
         let req = Request::builder()
@@ -519,7 +516,7 @@ mod tests {
 
         // Authenticate the request
         provider
-            .authenticate(&mut parts, &session)
+            .authenticate(&mut parts, &session, &idp)
             .await
             .expect("Authentication failed");
 
@@ -547,7 +544,7 @@ mod tests {
         let session = Session::new(None, session_store, None);
 
         // Create the provider
-        let provider = create_test_provider().await;
+        let (provider,_) = create_test_provider().await;
 
         // Start the authentication process
         let redirect_uri = "http://localhost:4040/callback".parse::<Uri>().unwrap();

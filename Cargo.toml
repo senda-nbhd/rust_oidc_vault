@@ -29,6 +29,7 @@ anyhow = { version = "1.0.96", features = ["backtrace"] }
 tower-sessions-moka-store = "0.15.0"
 tower-sessions-sqlx-store = { version = "0.15.0", features = ["postgres"] }
 url = "2.5.4"
+headers = "0.4.0"
 
 [dev-dependencies]
 headless_chrome = "1.0.17"

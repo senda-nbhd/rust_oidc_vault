@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use uuid::Uuid;
 
 // Types for authentication
@@ -19,11 +19,7 @@ struct TokenRequest<'a> {
 
 #[derive(Deserialize, Debug)]
 struct TokenResponse {
-    access_token: String,
-    expires_in: i32,
-    refresh_token: String,
-    #[serde(rename = "token_type")]
-    token_type: String,
+    access_token: String
 }
 
 // Keycloak specific types (kept private to this module)
@@ -70,8 +66,6 @@ struct RoleMappingContainer {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 struct ClientRoleMapping {
-    pub id: String,
-    pub client: String,
     pub mappings: Vec<KeycloakRole>,
 }
 

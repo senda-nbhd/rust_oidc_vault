@@ -13,9 +13,9 @@ use super::{
     keycloak::KeycloakProvider,
 };
 
-pub struct IdpAdmin<IdentityProvider> {
+pub struct IdpAdmin {
     config: IdpConfig,
-    provider: IdentityProvider,
+    provider: Box<dyn IdentityProvider>,
     teams_group_id: Uuid,
     institutions_group_id: Uuid,
     // Cache for user data by user ID
@@ -39,7 +39,7 @@ pub struct IdpAdmin<IdentityProvider> {
     comprehensive_report: Cache<(), Result<Vec<IdpUser>, IdpError>>,
 }
 
-impl IdpAdmin<KeycloakProvider> {
+impl IdpAdmin {
     pub async fn new(config: IdpConfig) -> Result<Arc<Self>, IdpError> {
         let mut provider = match config.provider_type.as_str() {
             "keycloak" => KeycloakProvider::new(&config)?,
@@ -73,27 +73,27 @@ impl IdpAdmin<KeycloakProvider> {
         // Create caches with appropriate TTL settings
         let cache_ttl = Duration::from_secs(120); // 2 minutes
 
-        let users_by_id = CacheBuilder::new(1000).time_to_idle(cache_ttl).build();
+        let users_by_id = CacheBuilder::new(1000).time_to_live(cache_ttl).build();
 
         let all_users_call = AtomicInstant::new(Instant::now() - Duration::from_secs(2000));
 
-        let users_by_username = CacheBuilder::new(500).time_to_idle(cache_ttl).build();
+        let users_by_username = CacheBuilder::new(500).time_to_live(cache_ttl).build();
 
-        let users_by_email = CacheBuilder::new(500).time_to_idle(cache_ttl).build();
-        let all_groups = CacheBuilder::new(1).time_to_idle(cache_ttl).build();
-        let group_by_id = CacheBuilder::new(500).time_to_idle(cache_ttl).build();
+        let users_by_email = CacheBuilder::new(500).time_to_live(cache_ttl).build();
+        let all_groups = CacheBuilder::new(1).time_to_live(cache_ttl).build();
+        let group_by_id = CacheBuilder::new(500).time_to_live(cache_ttl).build();
 
-        let group_members = CacheBuilder::new(500).time_to_idle(cache_ttl).build();
+        let group_members = CacheBuilder::new(500).time_to_live(cache_ttl).build();
 
-        let user_groups = CacheBuilder::new(1000).time_to_idle(cache_ttl).build();
+        let user_groups = CacheBuilder::new(1000).time_to_live(cache_ttl).build();
 
-        let user_roles = CacheBuilder::new(1000).time_to_idle(cache_ttl).build();
+        let user_roles = CacheBuilder::new(1000).time_to_live(cache_ttl).build();
 
-        let comprehensive_report = CacheBuilder::new(10).time_to_idle(cache_ttl).build();
+        let comprehensive_report = CacheBuilder::new(10).time_to_live(cache_ttl).build();
 
         Ok(Arc::new(IdpAdmin {
             config,
-            provider,
+            provider: Box::new(provider),
             teams_group_id,
             institutions_group_id,
             all_users_call,
