@@ -1,13 +1,4 @@
-use std::sync::Arc;
-
-use aicl_oidc::{
-    axum::{
-        extractors::OptionalIdentity,
-        middleware::{AuthenticateLayer, LoginEnforcerLayer},
-    },
-    oidc::{keycloak::KeycloakOidcProvider, logout::LogoutService},
-    AiclIdentity,
-};
+use aicl_oidc::{OptionalIdentity, AiclIdentifier, AiclIdentity, AppErrorHandler};
 use axum::{
     response::IntoResponse, routing::get, Router,
 };
@@ -18,32 +9,23 @@ use tower_sessions::{
     Expiry, MemoryStore, SessionManagerLayer,
 };
 
-pub async fn run(identifier: Arc<KeycloakOidcProvider>) {
+pub async fn run(identifier: AiclIdentifier, error_handler: AppErrorHandler) {
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false)
         .with_same_site(SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(Duration::seconds(120)));
 
-    let auth_layer = AuthenticateLayer {
-        identifier: identifier.clone(),
-    };
-    let login_layer = LoginEnforcerLayer {
-        identifier: identifier.clone(),
-    };
-    let logout_service = LogoutService {
-        identifier: identifier.clone(),
-    };
-
     let app: Router<()> = Router::new();
 
     let app = app
         .route("/foo", get(authenticated))
-        .route_service("/logout", logout_service)
-        .layer(login_layer)
+        .route_service("/logout", identifier.logout_service())
+        .layer(identifier.login_layer())
         .route("/bar", get(maybe_authenticated))
-        .layer(auth_layer)
+        .layer(identifier.authenticate_layer())
         .layer(session_layer)
+        .layer(error_handler.layer())
         .layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind("0.0.0.0:4040").await.unwrap();

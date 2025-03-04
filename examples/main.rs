@@ -1,15 +1,4 @@
-use std::sync::Arc;
-
-use aicl_oidc::{
-    axum::{
-        extractors::OptionalIdentity,
-        middleware::{AuthenticateLayer, LoginEnforcerLayer},
-    },
-    idp::admin::IdpAdmin,
-    oidc::{keycloak::{KeycloakOidcBuilder, KeycloakOidcProvider}, logout::LogoutService},
-    vault::VaultService,
-    AiclIdentity,
-};
+use aicl_oidc::{OptionalIdentity, errors::JsonErrorHandler, AiclIdentifier, AiclIdentity, AppErrorHandler};
 use axum::{response::IntoResponse, routing::get, Router};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
@@ -20,32 +9,23 @@ use tower_sessions::{
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-pub async fn run(identifier: Arc<KeycloakOidcProvider>) {
+pub async fn run(identifier: AiclIdentifier, error_handler: AppErrorHandler) {
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false)
         .with_same_site(SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(Duration::seconds(120)));
 
-    let auth_layer = AuthenticateLayer {
-        identifier: identifier.clone(),
-    };
-    let login_layer = LoginEnforcerLayer {
-        identifier: identifier.clone(),
-    };
-    let logout_service = LogoutService {
-        identifier: identifier.clone(),
-    };
-
     let app: Router<()> = Router::new();
 
     let app = app
         .route("/foo", get(authenticated))
-        .route_service("/logout", logout_service)
-        .layer(login_layer)
+        .route_service("/logout", identifier.logout_service())
+        .layer(identifier.login_layer())
         .route("/bar", get(maybe_authenticated))
-        .layer(auth_layer)
+        .layer(identifier.authenticate_layer())
         .layer(session_layer)
+        .layer(error_handler.layer())
         .layer(TraceLayer::new_for_http());
 
     let listener = TcpListener::bind("0.0.0.0:4040").await.unwrap();
@@ -85,31 +65,7 @@ async fn main() {
 
     // Log application startup
     tracing::info!("Starting OIDC application");
-    let vault = VaultService::from_env()
-        .await
-        .expect("Vault service initialization failed");
-    let idp_config = vault
-        .get_idp_config_from_vault()
-        .await
-        .expect("Failed to get IDP config from Vault");
-    let client_secret = idp_config.client_secret.clone();
-    let idp_admin = IdpAdmin::new(idp_config)
-        .await
-        .expect("IDP admin initialization failed");
-    let oidc_provider = KeycloakOidcBuilder::new(
-        idp_admin,
-        "http://localhost:4040".to_string(), // Application base URL
-        "http://keycloak:8080/realms/app-realm".to_string(), // Issuer
-        "rust-app".to_string(),              // Client ID
-    )
-    .with_client_secret(client_secret)
-    .with_scopes(vec![
-        "openid".to_string(),
-        "profile".to_string(),
-        "email".to_string(),
-    ])
-    .build()
-    .await
-    .expect("Failed to build KeycloakOidcProvider");
-    run(Arc::new(oidc_provider)).await;
+    let identifier = AiclIdentifier::from_env().await.expect("Failed to initialize AiclIdentifier");
+    let error_handler = AppErrorHandler::new(JsonErrorHandler::default());
+    run(identifier, error_handler).await;
 }

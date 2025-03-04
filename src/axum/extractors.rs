@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
 use axum::{extract::FromRequestParts, http::request::Parts};
 use reqwest::StatusCode;
 
-use crate::{idp::admin::IdpAdmin, AiclIdentity};
+use crate::AiclIdentity;
 
 impl<S> FromRequestParts<S> for AiclIdentity
 where

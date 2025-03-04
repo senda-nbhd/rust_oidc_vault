@@ -14,6 +14,8 @@ use tower_sessions::Session;
 
 use crate::{oidc::keycloak::KeycloakOidcProvider, AiclIdentity};
 
+use super::error::AppErrorHandler;
+
 pub struct AuthenticateService<S> {
     identifier: Arc<KeycloakOidcProvider>,
     inner: S,
@@ -44,6 +46,7 @@ where
     }
 
     fn call(&mut self, request: Request<B>) -> Self::Future {
+        let error_handler = request.extensions().get::<AppErrorHandler>().expect("Error handler not found").clone();
         let inner = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, inner);
         let provider = self.identifier.clone();
@@ -56,7 +59,13 @@ where
 
         Box::pin(async move {
             let (mut parts, body) = request.into_parts();
-            provider.authenticate(&mut parts, &session).await.unwrap();
+            match provider.authenticate(&mut parts, &session).await {
+                Ok(()) => {},
+                Err(error) => {
+                    tracing::error!(%error, "Authentication failed");
+                    return Ok(error_handler.handle_error(error));
+                },
+            }
             let request = Request::from_parts(parts, body);
             inner.call(request).await
         })
@@ -153,6 +162,7 @@ where
     }
 
     fn call(&mut self, req: Request<B>) -> Self::Future {
+        let error_handler = req.extensions().get::<AppErrorHandler>().expect("Error handler not found").clone();
         // Clone the inner service
         let mut inner = self.inner.clone();
 
@@ -182,7 +192,7 @@ where
                     Ok(()) => Ok(Redirect::to(&redirect.to_string()).into_response()),
                     Err(e) => {
                         tracing::error!("Failed to start authentication: {}", e);
-                        Ok(axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response())
+                        Ok(error_handler.handle_error(e))
                     }
                 }
             });
@@ -193,7 +203,7 @@ where
                 Ok(auth_uri) => Ok(Redirect::to(&auth_uri.to_string()).into_response()),
                 Err(e) => {
                     tracing::error!("Failed to start authentication: {}", e);
-                    Ok(axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response())
+                    Ok(error_handler.handle_error(e))
                 }
             }
         })
