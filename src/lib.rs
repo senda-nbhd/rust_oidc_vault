@@ -1,15 +1,23 @@
 pub mod axum;
+pub mod errors;
 pub mod idp;
 pub mod oidc;
 pub mod vault;
-pub mod errors;
 
 use std::sync::Arc;
 
 use anyhow::Context;
-pub use axum::{middleware::{AuthenticateLayer, LoginEnforcerLayer}, error::{AppErrorHandler, ErrorHandlerExtensionLayer}, extractors::OptionalIdentity};
+use axum::middleware::IdentifierLayer;
+pub use axum::{
+    error::{AppErrorHandler, ErrorHandlerExtensionLayer},
+    extractors::OptionalIdentity,
+    middleware::{ApiTokenAuthLayer, AuthenticateLayer, LoginEnforcerLayer},
+};
 use idp::admin::IdpAdmin;
-use oidc::{keycloak::{KeycloakOidcBuilder, KeycloakOidcProvider}, logout::LogoutService};
+use oidc::{
+    keycloak::{KeycloakOidcBuilder, KeycloakOidcProvider},
+    logout::LogoutService,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use vault::VaultService;
@@ -78,59 +86,67 @@ pub struct AiclIdentity {
     pub role: Role,
 }
 
+#[derive(Clone)]
 pub struct AiclIdentifier {
-    vault_service: Arc<VaultService>,
-    oidc_provider: Arc<KeycloakOidcProvider>,
-    idp_admin: Arc<IdpAdmin>,
+    pub vault: Arc<VaultService>,
+    pub oidc: Arc<KeycloakOidcProvider>,
+    pub idp: Arc<IdpAdmin>,
 }
 
 impl AiclIdentifier {
     pub async fn from_env() -> anyhow::Result<Self> {
-        let vault_service = Arc::new(VaultService::from_env()
-            .await
-            .with_context(|| "Vault service initialization failed")?);
-        let idp_config = vault_service
+        let vault = Arc::new(
+            VaultService::from_env()
+                .await
+                .with_context(|| "Vault service initialization failed")?,
+        );
+        let idp_config = vault
             .get_idp_config_from_vault()
             .await
             .with_context(|| "Failed to get IDP config from Vault")?;
         let client_secret = idp_config.client_secret.clone();
-        let idp_admin = IdpAdmin::new(idp_config)
+        let idp = IdpAdmin::new(idp_config)
             .await
             .with_context(|| "IDP admin initialization failed")?;
-        let oidc_provider = Arc::new(KeycloakOidcBuilder::new(
-            "http://localhost:4040".to_string(), // Application base URL
-            "http://keycloak:8080/realms/app-realm".to_string(), // Issuer
-            "rust-app".to_string(),              // Client ID
-        )
-        .with_client_secret(client_secret)
-        .with_scopes(vec![
-            "openid".to_string(),
-            "profile".to_string(),
-            "email".to_string(),
-        ])
-        .build()
-        .await
-        .with_context(|| "Failed to build KeycloakOidcProvider")?);
+        let oidc = Arc::new(
+            KeycloakOidcBuilder::new(
+                "http://localhost:4040".to_string(), // Application base URL
+                "http://keycloak:8080/realms/app-realm".to_string(), // Issuer
+                "rust-app".to_string(),              // Client ID
+            )
+            .with_client_secret(client_secret)
+            .with_scopes(vec![
+                "openid".to_string(),
+                "profile".to_string(),
+                "email".to_string(),
+            ])
+            .build()
+            .await
+            .with_context(|| "Failed to build KeycloakOidcProvider")?,
+        );
 
-        Ok(Self { oidc_provider, vault_service, idp_admin })
+        Ok(Self { oidc, vault, idp })
     }
-    
-    pub fn authenticate_layer(&self) -> AuthenticateLayer {
-        AuthenticateLayer {
-            identifier: self.oidc_provider.clone(),
-            idp: self.idp_admin.clone(),
+
+    pub fn identifier_layer(&self) -> IdentifierLayer {
+        IdentifierLayer {
+            identifier: self.clone(),
         }
+    }
+
+    pub fn authenticate_layer(&self) -> AuthenticateLayer {
+        AuthenticateLayer {}
     }
 
     pub fn login_layer(&self) -> LoginEnforcerLayer {
-        LoginEnforcerLayer {
-            identifier: self.oidc_provider.clone(),
-        }
+        LoginEnforcerLayer {}
     }
 
     pub fn logout_service(&self) -> LogoutService {
-        LogoutService {
-            identifier: self.oidc_provider.clone(),
-        }
+        LogoutService {}
+    }
+
+    pub fn api_token_layer(&self) -> ApiTokenAuthLayer {
+        ApiTokenAuthLayer {}
     }
 }

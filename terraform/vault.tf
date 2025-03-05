@@ -113,6 +113,10 @@ resource "vault_jwt_auth_backend_role" "admin_role" {
   role_name      = "admin"
   token_ttl      = 3600 # 1 hour
   token_max_ttl  = 86400 # 24 hours
+  allowed_redirect_uris = [
+    "http://localhost:4040/api/auth/oidc/callback",
+    "http://app:4040/api/auth/oidc/callback"
+  ]
   token_policies = ["admin"]
   bound_audiences = [keycloak_openid_client.app_client.client_id]
   user_claim      = "sub"
@@ -131,6 +135,10 @@ resource "vault_jwt_auth_backend_role" "team_admin_role" {
   role_name      = "team-admin"
   token_ttl      = 3600 # 1 hour
   token_max_ttl  = 86400 # 24 hours
+  allowed_redirect_uris = [
+    "http://localhost:4040/api/auth/oidc/callback",
+    "http://app:4040/api/auth/oidc/callback"
+  ]
   token_policies = ["team-admin"]
   bound_audiences = [keycloak_openid_client.app_client.client_id]
   user_claim      = "sub"
@@ -149,6 +157,10 @@ resource "vault_jwt_auth_backend_role" "team_member_role" {
   role_name      = "team-member"
   token_ttl      = 3600 # 1 hour
   token_max_ttl  = 86400 # 24 hours
+  allowed_redirect_uris = [
+    "http://localhost:4040/api/auth/oidc/callback",
+    "http://app:4040/api/auth/oidc/callback"
+  ]
   token_policies = ["team-member"]
   bound_audiences = [keycloak_openid_client.app_client.client_id]
   user_claim      = "sub"
@@ -167,6 +179,10 @@ resource "vault_jwt_auth_backend_role" "advisor_role" {
   role_name      = "advisor"
   token_ttl      = 3600 # 1 hour
   token_max_ttl  = 86400 # 24 hours
+  allowed_redirect_uris = [
+    "http://localhost:4040/api/auth/oidc/callback",
+    "http://app:4040/api/auth/oidc/callback"
+  ]
   token_policies = ["advisor"]
   bound_audiences = [keycloak_openid_client.app_client.client_id]
   user_claim      = "sub"
@@ -185,6 +201,10 @@ resource "vault_jwt_auth_backend_role" "readonly_role" {
   role_name      = "readonly"
   token_ttl      = 3600 # 1 hour
   token_max_ttl  = 86400 # 24 hours
+  allowed_redirect_uris = [
+    "http://localhost:4040/api/auth/oidc/callback",
+    "http://app:4040/api/auth/oidc/callback"
+  ]
   token_policies = ["readonly"]
   bound_audiences = [keycloak_openid_client.app_client.client_id]
   user_claim      = "sub"

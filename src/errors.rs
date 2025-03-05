@@ -65,9 +65,10 @@ impl AppError {
             Self::Authorization(_) => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Self::Session(_) | Self::IdentityProvider(_) | Self::Identifier(_) | Self::InternalServer(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            Self::Session(_)
+            | Self::IdentityProvider(_)
+            | Self::Identifier(_)
+            | Self::InternalServer(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ServiceError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -78,7 +79,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let status = self.status_code();
         let message = self.to_string();
-        
+
         (status, message).into_response()
     }
 }
@@ -97,7 +98,7 @@ pub struct DefaultErrorHandler {
 impl ErrorHandler for DefaultErrorHandler {
     fn handle_error(&self, error: AppError) -> Response {
         let status = error.status_code();
-        
+
         if self.include_details {
             // In development mode, include error details
             let body = format!("Error: {}", error);
@@ -111,7 +112,7 @@ impl ErrorHandler for DefaultErrorHandler {
                 StatusCode::BAD_REQUEST => "Invalid request",
                 _ => "An unexpected error occurred",
             };
-            
+
             (status, message).into_response()
         }
     }
@@ -126,7 +127,7 @@ pub struct HtmlErrorHandler {
 impl ErrorHandler for HtmlErrorHandler {
     fn handle_error(&self, error: AppError) -> Response {
         let status = error.status_code();
-        
+
         // Here you would typically render an HTML template with the error details
         // This is a simplified example - you would integrate with your template engine
         let html = format!(
@@ -145,8 +146,13 @@ impl ErrorHandler for HtmlErrorHandler {
                 error.to_string()
             }
         );
-        
-        (status, [(axum::http::header::CONTENT_TYPE, "text/html")], html).into_response()
+
+        (
+            status,
+            [(axum::http::header::CONTENT_TYPE, "text/html")],
+            html,
+        )
+            .into_response()
     }
 }
 
@@ -158,14 +164,16 @@ pub struct JsonErrorHandler {
 
 impl Default for JsonErrorHandler {
     fn default() -> Self {
-        Self { include_details: true }
+        Self {
+            include_details: true,
+        }
     }
 }
 
 impl ErrorHandler for JsonErrorHandler {
     fn handle_error(&self, error: AppError) -> Response {
         let status = error.status_code();
-        
+
         let json_body = if self.include_details {
             // Include detailed error information in development
             serde_json::json!({
@@ -190,9 +198,13 @@ impl ErrorHandler for JsonErrorHandler {
                 }
             })
         };
-        
-        (status, [(axum::http::header::CONTENT_TYPE, "application/json")], 
-         serde_json::to_string(&json_body).unwrap()).into_response()
+
+        (
+            status,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            serde_json::to_string(&json_body).unwrap(),
+        )
+            .into_response()
     }
 }
 
@@ -201,23 +213,23 @@ impl AppError {
     pub fn unauthorized(message: impl fmt::Display) -> Self {
         Self::Authentication(OidcError::AuthenticationError(message.to_string()))
     }
-    
+
     pub fn forbidden(message: impl fmt::Display) -> Self {
         Self::Authorization(message.to_string())
     }
-    
+
     pub fn not_found(message: impl fmt::Display) -> Self {
         Self::NotFound(message.to_string())
     }
-    
+
     pub fn bad_request(message: impl fmt::Display) -> Self {
         Self::BadRequest(message.to_string())
     }
-    
+
     pub fn internal_error(message: impl fmt::Display) -> Self {
         Self::InternalServer(message.to_string())
     }
-    
+
     pub fn session_error(message: impl fmt::Display) -> Self {
         Self::Session(message.to_string())
     }

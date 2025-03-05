@@ -19,7 +19,7 @@ struct TokenRequest<'a> {
 
 #[derive(Deserialize, Debug)]
 struct TokenResponse {
-    access_token: String
+    access_token: String,
 }
 
 // Keycloak specific types (kept private to this module)

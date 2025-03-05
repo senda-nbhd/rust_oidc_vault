@@ -6,28 +6,66 @@ use axum::{
 use futures_util::{future::BoxFuture, FutureExt};
 use headers::{authorization::Bearer, Authorization, HeaderMapExt};
 use serde::Deserialize;
-use std::{
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::task::{Context, Poll};
 use tower::{Layer, Service};
 use tower_sessions::Session;
 
-use crate::{idp::admin::IdpAdmin, oidc::keycloak::KeycloakOidcProvider, vault::VaultService, AiclIdentity};
+use crate::{AiclIdentifier, AiclIdentity};
 
 use super::error::AppErrorHandler;
 
+/// A layer that adds the identifier to request extensions
+#[derive(Clone)]
+pub struct IdentifierLayer {
+    pub(crate) identifier: AiclIdentifier,
+}
+
+impl<S> Layer<S> for IdentifierLayer {
+    type Service = IdentifierService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        IdentifierService {
+            inner,
+            identifier: self.identifier.clone(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct IdentifierService<S> {
+    inner: S,
+    identifier: AiclIdentifier,
+}
+
+impl<S, B> Service<Request<B>> for IdentifierService<S>
+where
+    S: Service<Request<B>>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, mut req: Request<B>) -> Self::Future {
+        // Add error handler to request extensions
+        req.extensions_mut().insert(self.identifier.clone());
+        self.inner.call(req)
+    }
+}
+
 pub struct AuthenticateService<S> {
-    identifier: Arc<KeycloakOidcProvider>,
-    idp: Arc<IdpAdmin>,
     inner: S,
 }
 
 impl<S: Clone> Clone for AuthenticateService<S> {
     fn clone(&self) -> Self {
         Self {
-            identifier: self.identifier.clone(),
-            idp: self.idp.clone(),
             inner: self.inner.clone(),
         }
     }
@@ -49,11 +87,18 @@ where
     }
 
     fn call(&mut self, request: Request<B>) -> Self::Future {
-        let error_handler = request.extensions().get::<AppErrorHandler>().expect("Error handler not found").clone();
+        let error_handler = request
+            .extensions()
+            .get::<AppErrorHandler>()
+            .expect("Error handler not found")
+            .clone();
+        let identifier = request
+            .extensions()
+            .get::<AiclIdentifier>()
+            .expect("Identifier not found")
+            .clone();
         let inner = self.inner.clone();
         let mut inner = std::mem::replace(&mut self.inner, inner);
-        let provider = self.identifier.clone();
-        let idp = self.idp.clone();
 
         // Get the session from the request extensions
         let session = match request.extensions().get::<Session>() {
@@ -63,12 +108,16 @@ where
 
         Box::pin(async move {
             let (mut parts, body) = request.into_parts();
-            match provider.authenticate(&mut parts, &session, &idp).await {
-                Ok(()) => {},
+            match identifier
+                .oidc
+                .authenticate(&mut parts, &session, &identifier.idp)
+                .await
+            {
+                Ok(()) => {}
                 Err(error) => {
                     tracing::error!(%error, "Authentication failed");
                     return Ok(error_handler.handle_error(error));
-                },
+                }
             }
             let request = Request::from_parts(parts, body);
             inner.call(request).await
@@ -76,66 +125,37 @@ where
     }
 }
 
-pub struct AuthenticateLayer {
-    pub identifier: Arc<KeycloakOidcProvider>,
-    pub idp: Arc<IdpAdmin>,
-}
-
-impl Clone for AuthenticateLayer {
-    fn clone(&self) -> Self {
-        Self {
-            identifier: self.identifier.clone(),
-            idp: self.idp.clone(),
-        }
-    }
-}
+#[derive(Clone)]
+pub struct AuthenticateLayer {}
 
 impl<S: Clone> Layer<S> for AuthenticateLayer {
     type Service = AuthenticateService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        AuthenticateService {
-            identifier: self.identifier.clone(),
-            idp: self.idp.clone(),
-            inner,
-        }
+        AuthenticateService { inner }
     }
 }
 
 /// Layer that applies the login enforcer middleware
-pub struct LoginEnforcerLayer {
-    pub identifier: Arc<KeycloakOidcProvider>,
-}
-
-impl Clone for LoginEnforcerLayer {
-    fn clone(&self) -> Self {
-        Self {
-            identifier: self.identifier.clone(),
-        }
-    }
-}
+#[derive(Clone)]
+pub struct LoginEnforcerLayer {}
 
 impl<S> tower::Layer<S> for LoginEnforcerLayer {
     type Service = LoginEnforcerMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        LoginEnforcerMiddleware {
-            identifier: self.identifier.clone(),
-            inner,
-        }
+        LoginEnforcerMiddleware { inner }
     }
 }
 
 /// The middleware service that enforces login
 pub struct LoginEnforcerMiddleware<S> {
-    identifier: Arc<KeycloakOidcProvider>,
     inner: S,
 }
 
 impl<S: Clone> Clone for LoginEnforcerMiddleware<S> {
     fn clone(&self) -> Self {
         Self {
-            identifier: self.identifier.clone(),
             inner: self.inner.clone(),
         }
     }
@@ -169,7 +189,16 @@ where
     }
 
     fn call(&mut self, req: Request<B>) -> Self::Future {
-        let error_handler = req.extensions().get::<AppErrorHandler>().expect("Error handler not found").clone();
+        let error_handler = req
+            .extensions()
+            .get::<AppErrorHandler>()
+            .expect("Error handler not found")
+            .clone();
+        let identifier = req
+            .extensions()
+            .get::<AiclIdentifier>()
+            .expect("Identifier not found")
+            .clone();
         // Clone the inner service
         let mut inner = self.inner.clone();
 
@@ -177,8 +206,6 @@ where
         if let Some(_) = req.extensions().get::<AiclIdentity>() {
             return async move { inner.call(req).await }.boxed();
         }
-        // They aren't identified. Get the session and create a redirect URI to send them to the oidc login page.
-        let identifier = self.identifier.clone();
 
         // Get the session from the request extensions
         let session = match req.extensions().get::<Session>() {
@@ -193,6 +220,7 @@ where
         if let Some(Query(query)) = Query::<OidcQuery>::try_from_uri(&uri).ok() {
             return Box::pin(async move {
                 match identifier
+                    .oidc
                     .handle_callback(&query.code, &query.state, &session, &redirect)
                     .await
                 {
@@ -206,7 +234,7 @@ where
         }
 
         Box::pin(async move {
-            match identifier.start_auth(&session, &redirect).await {
+            match identifier.oidc.start_auth(&session, &redirect).await {
                 Ok(auth_uri) => Ok(Redirect::to(&auth_uri.to_string()).into_response()),
                 Err(e) => {
                     tracing::error!("Failed to start authentication: {}", e);
@@ -275,37 +303,20 @@ fn strip_oidc_params(uri: &Uri) -> Uri {
     parts.parse().unwrap_or_else(|_| uri.clone())
 }
 
-
-pub struct ApiTokenAuthLayer {
-    pub token_service: Arc<VaultService>,
-    pub idp_admin: Arc<IdpAdmin>,
-}
-
-impl Clone for ApiTokenAuthLayer {
-    fn clone(&self) -> Self {
-        Self {
-            token_service: self.token_service.clone(),
-            idp_admin: self.idp_admin.clone(),
-        }
-    }
-}
+#[derive(Clone)]
+pub struct ApiTokenAuthLayer {}
 
 impl<S> tower::Layer<S> for ApiTokenAuthLayer {
     type Service = ApiTokenAuthMiddleware<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        ApiTokenAuthMiddleware {
-            token_service: self.token_service.clone(),
-            idp_admin: self.idp_admin.clone(),
-            inner,
-        }
+        ApiTokenAuthMiddleware { inner }
     }
 }
 
 // The middleware service that authenticates API tokens
+#[derive(Clone)]
 pub struct ApiTokenAuthMiddleware<S> {
-    token_service: Arc<VaultService>,
-    idp_admin: Arc<IdpAdmin>,
     inner: S,
 }
 
@@ -314,18 +325,18 @@ struct TokenQuery {
     token: Option<String>,
 }
 
-fn extract_token<B>(req: &Request<B>) -> Option<String> {    
+fn extract_token<B>(req: &Request<B>) -> Option<String> {
     let headers = req.headers();
-    
-    if let Some(bearer) = headers.typed_get::<Authorization::<Bearer>>() {
+
+    if let Some(bearer) = headers.typed_get::<Authorization<Bearer>>() {
         return Some(bearer.token().to_string());
     }
-    
+
     // Try to get token from query parameter
     if let Ok(Query(params)) = Query::<TokenQuery>::try_from_uri(req.uri()) {
         return params.token;
     }
-    
+
     None
 }
 
@@ -339,28 +350,31 @@ where
     type Error = S::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(
-        &mut self,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
     fn call(&mut self, req: Request<B>) -> Self::Future {
         // Get the error handler from request extensions
-        let error_handler = req.extensions().get::<AppErrorHandler>()
+        let error_handler = req
+            .extensions()
+            .get::<AppErrorHandler>()
             .expect("Error handler not found")
             .clone();
-            
+
+        let identifier = req
+            .extensions()
+            .get::<AiclIdentifier>()
+            .expect("Identifier not found")
+            .clone();
+
         // Get token service and setup clones for async block
-        let token_service = self.token_service.clone();
-        let idp_admin = self.idp_admin.clone();
         let mut inner = self.inner.clone();
 
         Box::pin(async move {
             // Extract the token from either header or query parameter
             let token = extract_token(&req);
-            
+
             let token = match token {
                 Some(token) => token,
                 None => {
@@ -369,17 +383,17 @@ where
                     return inner.call(req).await;
                 }
             };
-            
+
             // Verify the token and get the user ID
-            match token_service.verify_token(&token).await {
+            match identifier.vault.verify_token(&token).await {
                 Ok(user_id) => {
                     // Get the user identity from IdpAdmin
-                    match idp_admin.get_domain_user(user_id).await {
+                    match identifier.idp.get_domain_user(user_id).await {
                         Ok(identity) => {
                             // Add identity to request extensions
                             let (mut parts, body) = req.into_parts();
                             parts.extensions.insert(identity);
-                            
+
                             // Reconstruct the request and continue
                             let req = Request::from_parts(parts, body);
                             inner.call(req).await
@@ -390,9 +404,7 @@ where
                         }
                     }
                 }
-                Err(token_error) => {
-                    Ok(error_handler.handle_error(token_error))
-                }
+                Err(token_error) => Ok(error_handler.handle_error(token_error)),
             }
         })
     }

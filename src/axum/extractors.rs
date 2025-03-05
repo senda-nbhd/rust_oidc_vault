@@ -1,7 +1,7 @@
 use axum::{extract::FromRequestParts, http::request::Parts};
 use reqwest::StatusCode;
 
-use crate::AiclIdentity;
+use crate::{AiclIdentifier, AiclIdentity};
 
 impl<S> FromRequestParts<S> for AiclIdentity
 where
@@ -38,3 +38,20 @@ where
     }
 }
 
+impl<S> FromRequestParts<S> for AiclIdentifier
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<AiclIdentifier>()
+            .ok_or((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "AiclIdentifier not found".to_string(),
+            ))
+            .cloned()
+    }
+}

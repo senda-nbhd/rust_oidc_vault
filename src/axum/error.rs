@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::FromRequestParts, http::{request::Parts, Extensions, Request}, response::{IntoResponse, Response}
+    extract::FromRequestParts,
+    http::{request::Parts, Extensions, Request},
+    response::{IntoResponse, Response},
 };
 use reqwest::StatusCode;
 use tower::{Layer, Service};
 
-use crate::errors::{AppError, self};
+use crate::errors::{self, AppError};
 
 /// A wrapper around an error handler that can be used in request extensions
 #[derive(Clone)]
@@ -63,7 +65,10 @@ where
     type Error = S::Error;
     type Future = S::Future;
 
-    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
     }
 
@@ -75,10 +80,7 @@ where
 }
 
 /// Helper function to handle errors in route handlers
-pub fn handle_error(
-    extensions: &Extensions,
-    error: AppError,
-) -> Response {
+pub fn handle_error(extensions: &Extensions, error: AppError) -> Response {
     // Try to get error handler from extensions
     if let Some(handler) = extensions.get::<AppErrorHandler>() {
         handler.handle_error(error)
@@ -105,4 +107,3 @@ where
             .cloned()
     }
 }
-

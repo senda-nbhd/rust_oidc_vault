@@ -9,11 +9,10 @@ use openidconnect::{
         CoreResponseMode, CoreResponseType, CoreRevocableToken, CoreRevocationErrorResponse,
         CoreSubjectIdentifierType, CoreTokenIntrospectionResponse, CoreTokenType,
     },
-    AccessToken, Client, ClientId, ClientSecret, CsrfToken, EmptyAdditionalClaims,
-    AdditionalProviderMetadata, EmptyExtraTokenFields, EndpointMaybeSet, EndpointNotSet,
-    EndpointSet, IdToken, IdTokenFields, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeVerifier,
-    ProviderMetadata, RefreshToken, StandardErrorResponse, StandardTokenResponse,
-    TokenResponse,
+    AccessToken, AdditionalProviderMetadata, Client, ClientId, ClientSecret, CsrfToken,
+    EmptyAdditionalClaims, EmptyExtraTokenFields, EndpointMaybeSet, EndpointNotSet, EndpointSet,
+    IdToken, IdTokenFields, IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeVerifier,
+    ProviderMetadata, RefreshToken, StandardErrorResponse, StandardTokenResponse, TokenResponse,
 };
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
@@ -115,11 +114,7 @@ pub struct KeycloakOidcBuilder {
 }
 
 impl KeycloakOidcBuilder {
-    pub fn new(
-        application_base_url: String,
-        issuer: String,
-        client_id: String,
-    ) -> Self {
+    pub fn new(application_base_url: String, issuer: String, client_id: String) -> Self {
         Self {
             application_base_url,
             issuer,
@@ -144,7 +139,10 @@ impl KeycloakOidcBuilder {
             .build()?;
         let issuer_url = IssuerUrl::new(self.issuer)?;
         let provider_metadata = KeycloakMetadata::discover_async(issuer_url, &http_client).await?;
-        let end_session_endpoint = provider_metadata.additional_metadata().end_session_endpoint.clone();
+        let end_session_endpoint = provider_metadata
+            .additional_metadata()
+            .end_session_endpoint
+            .clone();
         let client_id = ClientId::new(self.client_id.clone());
         let client_secret = self.client_secret.map(ClientSecret::new);
         let oidc_client =
@@ -196,7 +194,7 @@ impl KeycloakOidcProvider {
         &self,
         parts: &mut request::Parts,
         session: &Session,
-        idp: &Arc<IdpAdmin>
+        idp: &Arc<IdpAdmin>,
     ) -> Result<(), OidcError> {
         let login_session: Option<AiclOidcSession> =
             session.get(SESSION_KEY).await.map_err(|e| {
@@ -375,7 +373,7 @@ impl KeycloakOidcProvider {
         let token: Option<KeyCloakToken> = session.get(TOKEN_KEY).await.map_err(|e| {
             OidcError::SessionError(format!("Failed to get token from session: {}", e))
         })?;
-    
+
         // Clear OIDC session data
         session
             .remove::<AiclOidcSession>(SESSION_KEY)
@@ -383,34 +381,42 @@ impl KeycloakOidcProvider {
             .map_err(|e| {
                 OidcError::SessionError(format!("Failed to remove session data: {}", e))
             })?;
-    
+
         session
             .remove::<KeyCloakToken>(TOKEN_KEY)
             .await
             .map_err(|e| OidcError::SessionError(format!("Failed to remove token data: {}", e)))?;
-    
+
         session
             .remove::<RefreshToken>(REFRESH_KEY)
             .await
-            .map_err(|e| OidcError::SessionError(format!("Failed to remove refresh token: {}", e)))?;
-    
+            .map_err(|e| {
+                OidcError::SessionError(format!("Failed to remove refresh token: {}", e))
+            })?;
+
         // Create a redirect URL to the Keycloak end session endpoint if available
         if let Some(token) = token {
             // Build the end_session_endpoint URL with ID token hint and post_logout_redirect_uri
             let mut end_session_url = self.end_session_endpoint.clone();
-            
+
             // Add ID token hint parameter
             let id_token_str = token.id_token.to_string();
-            end_session_url.query_pairs_mut().append_pair("id_token_hint", &id_token_str);
-            
+            end_session_url
+                .query_pairs_mut()
+                .append_pair("id_token_hint", &id_token_str);
+
             // Add post_logout_redirect_uri parameter
             let redirect_uri = self.application_base_url.to_string();
-            end_session_url.query_pairs_mut().append_pair("post_logout_redirect_uri", &redirect_uri);
-            
-            return Ok(axum::http::Uri::from_maybe_shared(end_session_url.to_string())
-                .map_err(|e| OidcError::Unknown(format!("Invalid logout URL: {}", e)))?);
+            end_session_url
+                .query_pairs_mut()
+                .append_pair("post_logout_redirect_uri", &redirect_uri);
+
+            return Ok(
+                axum::http::Uri::from_maybe_shared(end_session_url.to_string())
+                    .map_err(|e| OidcError::Unknown(format!("Invalid logout URL: {}", e)))?,
+            );
         }
-    
+
         // If we don't have a token or end_session_endpoint, just return to the application root
         Ok(axum::http::Uri::from_static("/"))
     }
@@ -467,7 +473,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_absolute_uri() {
-        let (provider,_) = create_test_provider().await;
+        let (provider, _) = create_test_provider().await;
         let uri: Uri = "https://example.com/path?query=value".parse().unwrap();
         let url = provider.uri_to_url(&uri).unwrap();
         assert_eq!(url.as_str(), "https://example.com/path?query=value");
@@ -475,7 +481,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_relative_uri_with_base() {
-        let (provider,_) = create_test_provider().await;
+        let (provider, _) = create_test_provider().await;
         let uri: Uri = "/path?query=value".parse().unwrap();
         let url = provider.uri_to_url(&uri).unwrap();
         assert_eq!(url.as_str(), "http://localhost:4040/path?query=value");
@@ -483,7 +489,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_path_only_uri() {
-        let (provider,_) = create_test_provider().await;
+        let (provider, _) = create_test_provider().await;
         let uri: Uri = "/some/path".parse().unwrap();
         let url = provider.uri_to_url(&uri).unwrap();
         assert_eq!(url.as_str(), "http://localhost:4040/some/path");
@@ -491,7 +497,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_uri() {
-        let (provider,_) = create_test_provider().await;
+        let (provider, _) = create_test_provider().await;
         let uri: Uri = "/".parse().unwrap();
         let url = provider.uri_to_url(&uri).unwrap();
         assert_eq!(url.as_str(), "http://localhost:4040/");
@@ -544,7 +550,7 @@ mod tests {
         let session = Session::new(None, session_store, None);
 
         // Create the provider
-        let (provider,_) = create_test_provider().await;
+        let (provider, _) = create_test_provider().await;
 
         // Start the authentication process
         let redirect_uri = "http://localhost:4040/callback".parse::<Uri>().unwrap();
