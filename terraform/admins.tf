@@ -3,8 +3,8 @@
 # Global Admin Users
 resource "keycloak_user" "global_admin_users" {
   for_each = {
-    "root"  = { first_name = "Admin", last_name = "User", email = "root@competition.org" },
-    "root2" = { first_name = "Super", last_name = "Admin", email = "root2@competition.org" }
+    "admin"  = { first_name = "Admin", last_name = "User", email = "admin@competition.org" },
+    "admin2" = { first_name = "Super", last_name = "Admin", email = "admin2@competition.org" }
   }
   
   realm_id   = keycloak_realm.realm.id
@@ -46,7 +46,7 @@ resource "keycloak_user_roles" "admin_role_assignment" {
   
   realm_id = keycloak_realm.realm.id
   user_id  = each.value.id
-  role_ids = ["admin"]
+  role_ids = [lookup(local.roles_map, "admin")]
 }
 
 # Assign spectator role to global spectators
@@ -55,7 +55,7 @@ resource "keycloak_user_roles" "spectator_role_assignment" {
   
   realm_id = keycloak_realm.realm.id
   user_id  = each.value.id
-  role_ids = ["spectator"]
+  role_ids = [lookup(local.roles_map, "spectator")]
 }
 
 # Vault policy for global admins

@@ -25,6 +25,10 @@ locals {
 
   roles = [
     {
+      name        = "admin"
+      description = "System administrator with full access"
+    },
+    {
       name        = "captain"
       description = "Team captain with administrative privileges"
     },

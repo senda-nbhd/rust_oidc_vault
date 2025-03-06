@@ -135,21 +135,6 @@ resource "keycloak_openid_group_membership_protocol_mapper" "group_mapper" {
   add_to_userinfo     = true
 }
 
-# Create group attribute mappers to include team attributes in tokens
-resource "keycloak_openid_group_membership_protocol_mapper" "team_id_mapper" {
-  realm_id    = keycloak_realm.realm.id
-  client_id   = keycloak_openid_client.app_client.id
-  name        = "team-id-mapper"
-  
-  claim_name  = "team_id"
-  full_path   = false
-  
-  # Include team ID in both ID and access tokens
-  add_to_id_token     = true
-  add_to_access_token = true
-  add_to_userinfo     = true
-}
-
 # Create region attribute mapper to include region code in tokens
 resource "keycloak_openid_user_attribute_protocol_mapper" "region_code_mapper" {
   realm_id  = keycloak_realm.realm.id

@@ -2,7 +2,9 @@ use aicl_oidc::{
     errors::JsonErrorHandler, oidc::keycloak::{KeyCloakToken, TOKEN_KEY}, vault::ApiToken, AiclIdentifier, AiclIdentity, AppErrorHandler, OptionalIdentity
 };
 use axum::{response::IntoResponse, routing::{get, post}, Json, Router};
+use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use reqwest::StatusCode;
+use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tower_sessions::{
@@ -22,6 +24,7 @@ pub async fn run(identifier: AiclIdentifier, error_handler: AppErrorHandler) {
 
     let app = app
         .route("/foo", get(authenticated))
+        .route("/debug/token", get(debug_token_handler))
         .route_service("/logout", identifier.logout_service())
         .route("/token", get(create_token))
         .route("/api/protected", get(token_authenticated))
@@ -95,6 +98,94 @@ async fn create_token(
 // Endpoint that requires token authentication
 async fn token_authenticated(identity: AiclIdentity) -> impl IntoResponse {
     format!("API access granted for {}!", identity.username)
+}
+
+/// Handler that shows the full token with all claims for debugging purposes
+pub async fn debug_token_handler(
+    identity: AiclIdentity,
+    session: Session,
+) -> impl IntoResponse {
+    // Get the OIDC token from the session
+    let token_result = session.get::<KeyCloakToken>(TOKEN_KEY).await;
+
+    match token_result {
+        Ok(Some(token)) => {
+            // Get the token string
+            let id_token_str = token.id_token.to_string();
+            
+            // Parse JWT segments (without validation)
+            let segments: Vec<&str> = id_token_str.split('.').collect();
+            if segments.len() < 2 {
+                return Json(json!({
+                    "error": "Invalid token format"
+                }));
+            }
+            
+            // Decode base64 for header and payload
+            let header = match base64_decode(segments[0]) {
+                Ok(h) => parse_json(&h),
+                Err(_) => json!({"error": "Failed to decode header"})
+            };
+            
+            let payload = match base64_decode(segments[1]) {
+                Ok(p) => parse_json(&p),
+                Err(_) => json!({"error": "Failed to decode payload"})
+            };
+            
+            // Return token information
+            Json(json!({
+                "user": {
+                    "id": identity.id.to_string(),
+                    "username": identity.username,
+                    "email": identity.email,
+                    "role": identity.role.as_str(),
+                },
+                "token": {
+                    "header": header,
+                    "payload": payload,
+                    "raw": {
+                        "id_token": id_token_str,
+                        "access_token": token.access_token.secret()
+                    }
+                }
+            }))
+        },
+        Ok(None) => Json(json!({
+            "error": "No token found in session",
+            "user": {
+                "id": identity.id.to_string(),
+                "username": identity.username,
+                "email": identity.email,
+                "role": identity.role.as_str(),
+            }
+        })),
+        Err(e) => Json(json!({
+            "error": format!("Session error: {}", e)
+        }))
+    }
+}
+
+// Helper function to decode base64 url-safe string
+fn base64_decode(input: &str) -> Result<String, String> {
+    let padded = match input.len() % 4 {
+        0 => input.to_string(),
+        2 => format!("{}==", input),
+        3 => format!("{}=", input),
+        _ => input.to_string(),
+    };
+    
+    let decoded = URL_SAFE.decode(&padded)
+        .map_err(|e| format!("Base64 decode error: {}", e))?;
+    
+    String::from_utf8(decoded)
+        .map_err(|e| format!("UTF-8 decode error: {}", e))
+}
+
+// Helper function to parse JSON
+fn parse_json(json_str: &str) -> Value {
+    serde_json::from_str(json_str).unwrap_or_else(|_| {
+        json!({"error": "Failed to parse JSON"})
+    })
 }
 
 

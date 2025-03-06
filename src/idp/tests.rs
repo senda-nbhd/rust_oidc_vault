@@ -41,27 +41,27 @@ async fn test_team1_member_retrieval() {
         .await
         .expect("Failed to create IdpAdmin");
 
-    // Test retrieving admin1 from Team1
-    let admin1_result = admin.find_users_by_username("admin1").await;
+    // Test retrieving captain1 from Team1
+    let captain1_result = admin.find_users_by_username("captain1").await;
     assert!(
-        admin1_result.is_ok(),
-        "Failed to retrieve user admin1: {:?}",
-        admin1_result.err()
+        captain1_result.is_ok(),
+        "Failed to retrieve user captain1: {:?}",
+        captain1_result.err()
     );
 
-    let admins = admin1_result.unwrap();
+    let admins = captain1_result.unwrap();
     assert_eq!(admins.len(), 1);
-    let admin1 = &admins[0];
-    assert_eq!(admin1.username, "admin1");
-    assert_eq!(admin1.email, "admin1@test.com".to_string());
-    assert_eq!(admin1.first_name, Some("Charles".to_string()));
+    let captain1 = &admins[0];
+    assert_eq!(captain1.username, "captain1");
+    assert_eq!(captain1.email, "captain1@test.com".to_string());
+    assert_eq!(captain1.first_name, Some("Charles".to_string()));
 
     // Test retrieving by UUID
-    let admin1_by_id = admin.get_user(admin1.id).await;
+    let captain1_by_id = admin.get_user(captain1.id).await;
     assert!(
-        admin1_by_id.is_ok(),
+        captain1_by_id.is_ok(),
         "Failed to retrieve user by ID: {:?}",
-        admin1_by_id.err()
+        captain1_by_id.err()
     );
 
     // Test team member retrieval
@@ -85,35 +85,35 @@ async fn test_role_assignments() {
         .await
         .expect("Failed to create IdpAdmin");
 
-    // First find root user
-    let root_result = admin.find_users_by_username("root").await;
+    // First find admin user
+    let admin_result = admin.find_users_by_username("admin").await;
     assert!(
-        root_result.is_ok(),
-        "Failed to retrieve root user: {:?}",
-        root_result.err()
+        admin_result.is_ok(),
+        "Failed to retrieve admin user: {:?}",
+        admin_result.err()
     );
 
-    let roots = root_result.unwrap();
-    assert!(!roots.is_empty(), "Root user not found");
-    let root_user = &roots[0];
+    let admins = admin_result.unwrap();
+    assert!(!admins.is_empty(), "admin user not found");
+    let admin_user = &admins[0];
 
-    // Test root user roles
-    let root_roles_result = admin.get_user_roles(root_user.id).await;
+    // Test admin user roles
+    let admin_roles_result = admin.get_user_roles(admin_user.id).await;
     assert!(
-        root_roles_result.is_ok(),
-        "Failed to retrieve root's roles: {:?}",
-        root_roles_result.err()
+        admin_roles_result.is_ok(),
+        "Failed to retrieve admin's roles: {:?}",
+        admin_roles_result.err()
     );
 
-    let root_roles = root_roles_result.unwrap();
-    let has_root_role = root_roles.iter().any(|role| role.name == "ROOT");
-    assert!(has_root_role, "Root user should have ROOT role");
+    let admin_roles = admin_roles_result.unwrap();
+    let has_admin_role = admin_roles.iter().any(|role| role.name == "admin");
+    assert!(has_admin_role, "admin user should have admin role");
 
     // Test team captain roles
-    let admin1_result = admin.find_users_by_username("admin1").await.unwrap();
-    let admin1 = &admin1_result[0];
-    let admin1_roles = admin.get_user_roles(admin1.id).await.unwrap();
-    let has_captain_role = admin1_roles.iter().any(|role| role.name == "CAPTAIN");
+    let captain1_result = admin.find_users_by_username("captain1").await.unwrap();
+    let captain1 = &captain1_result[0];
+    let captain1_roles = admin.get_user_roles(captain1.id).await.unwrap();
+    let has_captain_role = captain1_roles.iter().any(|role| role.name == "captain");
     assert!(has_captain_role, "Team admin should have CAPTAIN role");
 
     // Test advisor roles
@@ -125,7 +125,7 @@ async fn test_role_assignments() {
     let advisor = &advisors[0];
 
     let advisor_roles = admin.get_user_roles(advisor.id).await.unwrap();
-    let has_advisor_role = advisor_roles.iter().any(|role| role.name == "ADVISOR");
+    let has_advisor_role = advisor_roles.iter().any(|role| role.name == "advisor");
     assert!(
         has_advisor_role,
         "University advisor should have ADVISOR role"
@@ -141,8 +141,8 @@ async fn test_domain_model_conversion() {
         .expect("Failed to create IdpAdmin");
 
     // Test conversion for team captain
-    let admin1_result = admin.find_users_by_username("admin1").await.unwrap();
-    let domain_user_result = admin.to_domain_user(&admin1_result[0]).await;
+    let captain1_result = admin.find_users_by_username("captain1").await.unwrap();
+    let domain_user_result = admin.to_domain_user(&captain1_result[0]).await;
     assert!(
         domain_user_result.is_ok(),
         "Failed to convert team captain to domain model: {:?}",
@@ -150,7 +150,7 @@ async fn test_domain_model_conversion() {
     );
 
     let captain_domain = domain_user_result.unwrap();
-    assert_eq!(captain_domain.username, "admin1");
+    assert_eq!(captain_domain.username, "captain1");
 
     // Verify team info
     assert!(
@@ -276,10 +276,10 @@ async fn test_comprehensive_report() {
     );
 
     // Find specific user types in the report
-    let root_user = report.iter().find(|u| u.username == "root");
-    assert!(root_user.is_some(), "Root user not found in report");
+    let admin_user = report.iter().find(|u| u.username == "admin");
+    assert!(admin_user.is_some(), "admin user not found in report");
 
-    let team_captain = report.iter().find(|u| u.username == "admin1");
+    let team_captain = report.iter().find(|u| u.username == "captain1");
     assert!(team_captain.is_some(), "Team captain not found in report");
 
     let advisor = report.iter().find(|u| u.username == "advisor1");
@@ -290,14 +290,16 @@ async fn test_comprehensive_report() {
 
     // Verify all users have their roles and groups populated
     for user in &report {
-        // Root and global viewers don't have groups
+        // admin and global viewers don't have groups
         if ![
-            "root",
-            "root2",
+            "admin",
+            "admin2",
             "viewer_global",
             "viewer_global2",
             "advisor1",
             "advisor2",
+            "spec_school1",
+            "spec_school2",
         ]
         .contains(&user.username.as_str())
         {

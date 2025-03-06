@@ -34,6 +34,7 @@ dependencies = [
  "async-trait",
  "atomic-time",
  "axum",
+ "base64 0.22.1",
  "dotenvy",
  "futures-util",
  "headers",

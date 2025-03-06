@@ -98,7 +98,7 @@ pub struct KeyCloakToken {
         CoreJweContentEncryptionAlgorithm,
         CoreJwsSigningAlgorithm,
     >,
-    access_token: AccessToken,
+    pub access_token: AccessToken,
 }
 
 pub const SESSION_KEY: &str = "aicl-oidc-keycloak-session";

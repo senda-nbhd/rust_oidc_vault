@@ -47,11 +47,11 @@ async fn test_oidc_session_authentication() {
     // Fill in login credentials
     tab.find_element("#username")
         .expect("Failed to find username field")
-        .type_into("admin1")
+        .type_into("captain1")
         .expect("Failed to input username field");
     tab.find_element("#password")
         .expect("Failed to find password field")
-        .type_into("admin")
+        .type_into("captain")
         .expect("Failed to input password field");
 
     // Submit the login form
@@ -71,7 +71,7 @@ async fn test_oidc_session_authentication() {
         .get_inner_text()
         .expect("Failed to get inner text");
 
-    assert!(body.contains("admin1"), "Response should contain username");
+    assert!(body.contains("captain1"), "Response should contain username");
     assert!(body.contains("Team1"), "Response should contain team info");
 
     // Test accessing maybe_authenticated endpoint while authenticated
@@ -86,7 +86,7 @@ async fn test_oidc_session_authentication() {
         .expect("Failed to get inner text");
 
     assert!(
-        body.contains("Hello admin1! You are already logged in."),
+        body.contains("Hello captain1! You are already logged in."),
         "Response should indicate user is logged in"
     );
 
@@ -121,11 +121,11 @@ async fn test_token_authentication() {
     // Fill in login credentials
     tab.find_element("#username")
         .expect("Failed to find username field")
-        .type_into("admin1")
+        .type_into("captain1")
         .expect("Failed to input username field");
     tab.find_element("#password")
         .expect("Failed to find password field")
-        .type_into("admin")
+        .type_into("captain")
         .expect("Failed to input password field");
 
     // Submit the login form
@@ -176,7 +176,7 @@ async fn test_token_authentication() {
     // Check the response body contains the expected content
     let body = api_response.text().await.expect("Failed to get response body");
     assert!(
-        body.contains("API access granted for admin1"),
+        body.contains("API access granted for captain1"),
         "Response should indicate successful API access, got: {}", body
     );
     

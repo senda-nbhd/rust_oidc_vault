@@ -25,11 +25,11 @@ module "team1" {
   
   users = [
     {
-      username   = "admin1"
-      email      = "admin1@test.com"
+      username   = "captain1"
+      email      = "captain1@test.com"
       first_name = "Charles"
       last_name  = "Student"
-      password   = "admin"
+      password   = "captain"
       role       = "captain"
     },
     {
@@ -71,11 +71,11 @@ module "team2" {
   
   users = [
     {
-      username   = "admin2"
-      email      = "admin2@test.com"
+      username   = "captain2"
+      email      = "captain2@test.com"
       first_name = "Clara"
       last_name  = "Student"
-      password   = "admin"
+      password   = "captain"
       role       = "captain"
     },
     {
@@ -117,11 +117,11 @@ module "team3" {
   
   users = [
     {
-      username   = "admin3"
-      email      = "admin3@test.com"
+      username   = "captain3"
+      email      = "captain3@test.com"
       first_name = "Clara"
       last_name  = "Student"
-      password   = "admin"
+      password   = "captain"
       role       = "captain"
     },
     {

@@ -150,7 +150,7 @@ impl VaultService {
         role: Option<String>,
     ) -> Result<VaultClient, VaultError> {
         let login =
-            vaultrs::auth::oidc::login(&self.admin_client, &self.config.oidc_path, jwt, role)
+            vaultrs::auth::oidc::login(&self.admin_client, &self.config.oidc_path, jwt, Some("team-Team1-captain".to_string()))
                 .await?;
 
         // Create a new Vault client with the user's token
@@ -174,10 +174,11 @@ impl VaultService {
     ) -> Result<ApiToken, VaultError> {
         // Get the ID token string
         let id_token_str = oidc_token.id_token.to_string();
+        tracing::debug!(identity.username, "Creating API token for user");
 
         // Create a Vault client authenticated as the user via OIDC
         let user_client = self.create_user_vault_client(&id_token_str, None).await?;
-
+        tracing::debug!("User Vault client created");
         // Prepare token creation parameters using builder
         let mut builder = CreateTokenRequestBuilder::default();
 
@@ -191,12 +192,12 @@ impl VaultService {
         metadata.insert("user_id".to_string(), identity.id.to_string());
         metadata.insert("role".to_string(), identity.role.as_str().to_string());
         builder.meta(metadata);
-
+        tracing::debug!("Token metadata set");
         // Create the token using the user's Vault client with the builder
         let token_result = vaultrs::token::new(&user_client, Some(&mut builder))
             .await
             .map_err(|e| VaultError::TokenCreationError(e.to_string()))?;
-
+        tracing::debug!("Token created successfully");
         // Calculate expiration time as Unix timestamp
         let now = Self::current_timestamp()?;
         let expires_at = now + token_result.lease_duration;
