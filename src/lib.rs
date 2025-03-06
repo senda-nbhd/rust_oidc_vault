@@ -38,7 +38,7 @@ pub struct InstitutionIdentity {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
 pub enum Role {
-    Root,
+    Admin,
     Advisor,
     Captain,
     Student,
@@ -48,28 +48,28 @@ pub enum Role {
 impl Role {
     pub fn parse(s: &str) -> Self {
         match s {
-            "ROOT" => Self::Root,
-            "ADVISOR" => Self::Advisor,
-            "CAPTAIN" => Self::Captain,
-            "STUDENT" => Self::Student,
-            "SPECTATOR" => Self::Spectator,
+            "admin" => Self::Admin,
+            "advisor" => Self::Advisor,
+            "captain" => Self::Captain,
+            "student" => Self::Student,
+            "spectator" => Self::Spectator,
             _ => panic!("Role not found: {}", s),
         }
     }
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Root => "ROOT",
-            Self::Advisor => "ADVISOR",
-            Self::Captain => "CAPTAIN",
-            Self::Student => "STUDENT",
-            Self::Spectator => "SPECTATOR",
+            Self::Admin => "admin",
+            Self::Advisor => "advisor",
+            Self::Captain => "captain",
+            Self::Student => "student",
+            Self::Spectator => "spectator",
         }
     }
 
     pub fn is_admin(&self) -> bool {
         match self {
-            Self::Root => true,
+            Self::Admin => true,
             _ => false,
         }
     }

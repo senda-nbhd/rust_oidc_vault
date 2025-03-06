@@ -1,10 +1,8 @@
 #!/bin/sh
 set -e
 
-echo "Waiting for Vault to be ready..."
-sleep 3
 
-echo "Vault is ready - initializing Terraform"
+echo "Initializing Terraform"
 terraform init
 
 echo "Applying Terraform configuration..."

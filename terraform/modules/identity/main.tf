@@ -21,7 +21,6 @@ locals {
   
   # Create a map of groups for easier access
   groups_map = merge(
-    { for group in keycloak_group.teams : group.name => group.id },
     { for group in keycloak_group.institutions : group.name => group.id }
   )
 }

@@ -3,27 +3,27 @@ variable "realm_id" {
   type        = string
 }
 
-variable "roles" {
+variable "realm_roles" {
   description = "Map of role names to role IDs"
   type        = map(string)
 }
 
-variable "groups" {
-  description = "Map of group names to group IDs"
+variable "institution_groups" {
+  description = "Map of institution names to group IDs"
   type        = map(string)
+  default     = {}
 }
 
 variable "users" {
-  description = "List of user definitions with their roles and teams"
+  description = "List of admin user definitions with their roles"
   type = list(object({
     username    = string
     email       = string
     first_name  = string
     last_name   = string
     password    = string
-    roles       = list(string)
-    team        = string  # Team name
-    institution = string  # Institution name
+    role        = string  # Possible values: ROOT, ADVISOR, SPECTATOR
+    institution = string  # Optional institution name for advisors
   }))
   default = []
 }

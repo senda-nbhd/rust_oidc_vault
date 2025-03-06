@@ -80,3 +80,78 @@ resource "keycloak_openid_user_client_role_protocol_mapper" "app_user_client_rol
   claim_name = format("resource_access.%s.roles", keycloak_openid_client.app_client.client_id)
   multivalued = true
 }
+
+
+# Map UUID attribute to token
+resource "keycloak_openid_user_attribute_protocol_mapper" "id_mapper" {
+  realm_id  = keycloak_realm.realm.id
+  client_id = keycloak_openid_client.app_client.id
+  name      = "user-id-mapper"
+  
+  user_attribute    = "id"
+  claim_name        = "user_id"
+  claim_value_type  = "String"
+  
+  add_to_id_token     = true
+  add_to_access_token = true
+  add_to_userinfo     = true
+}
+
+# Create a composite claim that includes the AiclIdentity structure
+resource "keycloak_openid_user_session_note_protocol_mapper" "identity_mapper" {
+  realm_id  = keycloak_realm.realm.id
+  client_id = keycloak_openid_client.app_client.id
+  name      = "identity-mapper"
+  
+  claim_name        = "aicl_identity"
+  claim_value_type  = "String"
+  session_note      = "identity"
+  
+  add_to_id_token     = true
+  add_to_access_token = true
+}
+
+# Create group protocol mapper to include group membership in tokens
+resource "keycloak_openid_group_membership_protocol_mapper" "group_mapper" {
+  realm_id    = keycloak_realm.realm.id
+  client_id   = keycloak_openid_client.app_client.id
+  name        = "group-mapper"
+  
+  claim_name  = "groups"
+  full_path   = true
+  
+  # Include groups in both ID and access tokens
+  add_to_id_token     = true
+  add_to_access_token = true
+  add_to_userinfo     = true
+}
+
+# Create group attribute mappers to include team attributes in tokens
+resource "keycloak_openid_group_membership_protocol_mapper" "team_id_mapper" {
+  realm_id    = keycloak_realm.realm.id
+  client_id   = keycloak_openid_client.app_client.id
+  name        = "team-id-mapper"
+  
+  claim_name  = "team_id"
+  full_path   = false
+  
+  # Include team ID in both ID and access tokens
+  add_to_id_token     = true
+  add_to_access_token = true
+  add_to_userinfo     = true
+}
+
+# Create region attribute mapper to include region code in tokens
+resource "keycloak_openid_user_attribute_protocol_mapper" "region_code_mapper" {
+  realm_id  = keycloak_realm.realm.id
+  client_id = keycloak_openid_client.app_client.id
+  name      = "region-code-mapper"
+  
+  user_attribute    = "region_code"
+  claim_name        = "region_code"
+  claim_value_type  = "String"
+  
+  add_to_id_token     = true
+  add_to_access_token = true
+  add_to_userinfo     = true
+}

@@ -1,10 +1,17 @@
 # Updated users.tf based on SQL fixtures
 
+resource "vault_identity_oidc_key" "keycloak_provider_key" {
+  name      = "keycloak"
+  algorithm = "RS256"
+}
+
 module "identity" {
   source = "./modules/identity"
   
   realm_id      = keycloak_realm.realm.id
   app_client_id = keycloak_openid_client.app_client.id
+  vault_identity_oidc_key_name = vault_identity_oidc_key.keycloak_provider_key.name
+  external_accessor = vault_jwt_auth_backend.keycloak.accessor
 
   # Define teams extracted from SQL fixtures
   institutions = [
@@ -18,26 +25,10 @@ module "identity" {
     },
   ]
   
-  # Define teams extracted from SQL fixtures
-  teams = [
-    {
-      name        = "Team1"
-      description = "Team for authentication testing"
-    },
-    {
-      name        = "Team2"
-      description = "Team for authentication testing"
-    },
-    {
-      name        = "Team3"
-      description = "Team for authentication testing"
-    },
-  ]
-  
   # Roles extracted from SQL fixtures
   roles = [
     {
-      name        = "CAPTAIN"
+      name        = "captain"
       description = "Team captain with administrative privileges"
       rules = [
         {
@@ -47,7 +38,7 @@ module "identity" {
       ]
     },
     {
-      name        = "STUDENT"
+      name        = "student"
       description = "Regular team member"
       rules = [
         {
@@ -57,7 +48,7 @@ module "identity" {
       ]
     },
     {
-      name        = "SPECTATOR"
+      name        = "spectator"
       description = "Read-only access to team resources"
       rules = [
         {
@@ -67,7 +58,7 @@ module "identity" {
       ]
     },
     {
-      name        = "ROOT"
+      name        = "admin"
       description = "System administrator with full access"
       rules = [
         {
@@ -77,7 +68,7 @@ module "identity" {
       ]
     },
     {
-      name        = "ADVISOR"
+      name        = "advisor"
       description = "Academic advisor for institutions"
       rules = [
         {
@@ -85,172 +76,6 @@ module "identity" {
           capabilities = ["create", "update", "delete"]
         }
       ]
-    }
-  ]
-}
-
-module "users" {
-  source = "./modules/users"
-  
-  realm_id = keycloak_realm.realm.id
-  roles    = module.identity.roles
-  groups   = module.identity.groups
-  
-  users = [
-    # Team users from team_setup.sql
-    {
-      username   = "admin1"
-      email      = "admin1@test.com"
-      first_name = "Charles"
-      last_name  = "Student"
-      password   = "admin"
-      roles      = ["CAPTAIN"]
-      team       = "Team1"
-      institution = "School1"
-    },
-    {
-      username   = "member1"
-      email      = "member1@test.com"
-      first_name = "Mike"
-      last_name  = "Student"
-      password   = "member"
-      roles      = ["STUDENT"]
-      team       = "Team1"
-      institution = "School1"
-    },
-    {
-      username   = "viewer1"
-      email      = "viewer1@test.com"
-      first_name = "Smith"
-      last_name  = "Student"
-      password   = "viewer"
-      roles      = ["SPECTATOR"]
-      team       = "Team1"
-      institution = "School1"
-    },
-    {
-      username   = "admin2"
-      email      = "admin2@test.com"
-      first_name = "Clara"
-      last_name  = "Student"
-      password   = "admin"
-      roles      = ["CAPTAIN"]
-      team       = "Team2"
-      institution = "School1"
-    },
-    {
-      username   = "member2"
-      email      = "member2@test.com"
-      first_name = "Megan"
-      last_name  = "Student"
-      password   = "member"
-      roles      = ["STUDENT"]
-      team       = "Team2"
-      institution = "School1"
-    },
-    {
-      username   = "viewer2"
-      email      = "viewer2@test.com"
-      first_name = "Stephanie"
-      last_name  = "Student"
-      password   = "viewer"
-      roles      = ["SPECTATOR"]
-      team       = "Team2"
-      institution = "School1"
-    },
-
-        {
-      username   = "admin3"
-      email      = "admin3@test.com"
-      first_name = "Clara"
-      last_name  = "Student"
-      password   = "admin"
-      roles      = ["CAPTAIN"]
-      team       = "Team3"
-      institution = "School2"
-    },
-    {
-      username   = "member3"
-      email      = "member3@test.com"
-      first_name = "Megan"
-      last_name  = "Student"
-      password   = "member"
-      roles      = ["STUDENT"]
-      team       = "Team3"
-      institution = "School2"
-    },
-    {
-      username   = "viewer3"
-      email      = "viewer3@test.com"
-      first_name = "Stephanie"
-      last_name  = "Student"
-      password   = "viewer"
-      roles      = ["SPECTATOR"]
-      team       = "Team3"
-      institution = "School2"
-    },
-    # Advisors 
-    {
-      username   = "advisor1"
-      email      = "advisor1@school1.org"
-      first_name = "Advisor"
-      last_name  = "Advisor"
-      password   = "admin"
-      roles      = ["ADVISOR"]
-      team       = null
-      institution = "School1"
-    },
-    {
-      username   = "advisor2"
-      email      = "advisor2@school2.org"
-      first_name = "Advisor"
-      last_name  = "Advisor"
-      password   = "admin"
-      roles      = ["ADVISOR"]
-      team       = null
-      institution = "School2"
-    },
-    
-    # Admin users from admin_setup.sql
-    {
-      username   = "root"
-      email      = "root@competition.org"
-      first_name = "Admin"
-      last_name  = "Admin"
-      password   = "admin"
-      roles      = ["ROOT"]
-      team       = null
-      institution = null
-    },
-    {
-      username   = "root2"
-      email      = "root2@competition.org"
-      first_name = "Super"
-      last_name  = "Admin"
-      password   = "admin"
-      roles      = ["ROOT"]
-      team       = null
-      institution = null
-    },
-    {
-      username   = "viewer_global"
-      email      = "viewer@competition.org"
-      first_name = "View"
-      last_name  = "View"
-      password   = "admin"
-      roles      = ["VIEWER"]
-      team       = null
-      institution = null
-    },
-    {
-      username   = "viewer_global2"
-      email      = "viewer2@competition.org"
-      first_name = "Read"
-      last_name  = "View"
-      password   = "admin"
-      roles      = ["VIEWER"]
-      team       = null
-      institution = null
     }
   ]
 }

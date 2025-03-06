@@ -8,16 +8,13 @@ variable "app_client_id" {
   type        = string
 }
 
-variable "institutions" {
-  description = "List of team definitions"
-  type = list(object({
-    name        = string
-    description = string
-  }))
-  default = []
+variable "vault_identity_oidc_key_name" {
+  type = string
 }
 
-variable "teams" {
+variable "external_accessor" {}
+
+variable "institutions" {
   description = "List of team definitions"
   type = list(object({
     name        = string

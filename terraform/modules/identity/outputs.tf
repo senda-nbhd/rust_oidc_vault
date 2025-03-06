@@ -8,7 +8,13 @@ output "groups" {
   value       = local.groups_map
 }
 
-output "composite_admin_role_id" {
-  description = "ID of the composite admin role"
-  value       = keycloak_role.composite_admin_role.id
+output "institutions_parent_id" {
+  description = "Parent group ID for institutions"
+  value       = keycloak_group.institutions_parent.id
 }
+
+output "teams_parent_id" {
+  description = "Parent group ID for teams"
+  value       = keycloak_group.teams_parent.id
+}
+

@@ -28,10 +28,10 @@ resource "keycloak_openid_user_realm_role_protocol_mapper" "realm_roles_mapper" 
 #------------------------------------------------------------------------------#
 
 data "vault_policy_document" "policy" {
-  count = length(var.groups)
+  count = length(var.roles)
 
   dynamic "rule" {
-    for_each = var.groups[count.index].rules
+    for_each = var.roles[count.index].rules
     content {
       path = rule.value.path
       capabilities = rule.value.capabilities
@@ -40,8 +40,8 @@ data "vault_policy_document" "policy" {
 }
 
 resource "vault_policy" "policy" {
-  count = length(var.groups)
-  name   = var.groups[count.index].group_name
+  count = length(var.roles)
+  name   = var.roles[count.index].name
   policy = data.vault_policy_document.policy[count.index].hcl
 }
 
