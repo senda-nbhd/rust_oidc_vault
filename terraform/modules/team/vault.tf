@@ -51,6 +51,7 @@ resource "vault_jwt_auth_backend_role" "team_member_role" {
 
   backend        = var.vault_auth_backend_path
   role_name      = "team-${var.team_name}-member"
+  role_type      = "jwt"
   token_ttl      = 3600  # 1 hour
   token_max_ttl  = 86400 # 24 hours
   token_policies = [vault_policy.team_read_policy.name]
@@ -75,6 +76,7 @@ resource "vault_jwt_auth_backend_role" "team_captain_role" {
 
   backend        = var.vault_auth_backend_path
   role_name      = "team-${var.team_name}-captain"
+  role_type      = "jwt"
   token_ttl      = 3600  # 1 hour
   token_max_ttl  = 86400 # 24 hours
   token_policies = [vault_policy.team_admin_policy.name]

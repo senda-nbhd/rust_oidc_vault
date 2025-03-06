@@ -72,7 +72,7 @@ impl VaultService {
         let config = VaultConfig {
             address,
             token,
-            oidc_path: "oidc".to_string(), // Path from vault_jwt_auth_backend.keycloak in terraform
+            oidc_path: "jwt".to_string(), // Path from vault_jwt_auth_backend.keycloak in terraform
             oidc_role: "default".to_string(), // Role from vault_jwt_auth_backend_role.default in terraform
         };
         Self::new(config).await

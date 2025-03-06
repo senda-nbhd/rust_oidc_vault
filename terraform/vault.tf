@@ -1,19 +1,4 @@
 resource "vault_jwt_auth_backend" "keycloak" {
-  path               = "oidc"
-  type               = "oidc"
-  default_role       = "default"
-  oidc_discovery_url = "http://keycloak:8080/realms/app-realm"
-  oidc_client_id     = "vault"
-  oidc_client_secret = keycloak_openid_client.vault_client.client_secret
-
-  tune {
-    default_lease_ttl = "1h"
-    max_lease_ttl     = "24h"
-    token_type        = "default-service"
-  }
-}
-
-resource "vault_jwt_auth_backend" "keycloak_jwt" {
   path               = "jwt"
   type               = "jwt"
   default_role       = "default"
@@ -31,6 +16,7 @@ resource "vault_jwt_auth_backend" "keycloak_jwt" {
 # Default role mapping for users
 resource "vault_jwt_auth_backend_role" "default" {
   backend        = vault_jwt_auth_backend.keycloak.path
+  role_type      = "jwt"
   role_name      = "default"
   token_ttl      = 3600
   token_max_ttl  = 86400

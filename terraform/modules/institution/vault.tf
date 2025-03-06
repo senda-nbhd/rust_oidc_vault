@@ -61,6 +61,7 @@ resource "vault_jwt_auth_backend_role" "institution_spectator_role" {
 
   backend        = var.vault_auth_backend_path
   role_name      = "institution-${var.institution_name}-spectator"
+  role_type      = "jwt"
   token_ttl      = 3600  # 1 hour
   token_max_ttl  = 86400 # 24 hours
   token_policies = [vault_policy.institution_read_policy.name]
@@ -86,6 +87,7 @@ resource "vault_jwt_auth_backend_role" "institution_advisor_role" {
 
   backend        = var.vault_auth_backend_path
   role_name      = "institution-${var.institution_name}-advisor"
+  role_type      = "jwt"
   token_ttl      = 3600  # 1 hour
   token_max_ttl  = 86400 # 24 hours
   token_policies = [vault_policy.institution_advisor_policy.name]

@@ -106,6 +106,7 @@ EOT
 resource "vault_jwt_auth_backend_role" "global_admin_role" {
   backend        = vault_jwt_auth_backend.keycloak.path
   role_name      = "global-admin"
+  role_type      = "jwt"
   token_ttl      = 3600  # 1 hour
   token_max_ttl  = 86400 # 24 hours
   token_policies = [vault_policy.global_admin_policy.name]
@@ -128,6 +129,7 @@ resource "vault_jwt_auth_backend_role" "global_admin_role" {
 resource "vault_jwt_auth_backend_role" "global_spectator_role" {
   backend        = vault_jwt_auth_backend.keycloak.path
   role_name      = "global-spectator"
+  role_type      = "jwt"
   token_ttl      = 3600  # 1 hour
   token_max_ttl  = 86400 # 24 hours
   token_policies = [vault_policy.global_spectator_policy.name]
