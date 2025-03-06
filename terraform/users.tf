@@ -39,22 +39,52 @@ module "identity" {
     {
       name        = "CAPTAIN"
       description = "Team captain with administrative privileges"
+      rules = [
+        {
+          path         = "/secret/*"
+          capabilities = ["create", "update", "delete"]
+        }
+      ]
     },
     {
       name        = "STUDENT"
       description = "Regular team member"
+      rules = [
+        {
+          path         = "/secret/*"
+          capabilities = ["create", "update", "delete"]
+        }
+      ]
     },
     {
       name        = "SPECTATOR"
       description = "Read-only access to team resources"
+      rules = [
+        {
+          path         = "/secret/*"
+          capabilities = ["create", "update", "delete"]
+        }
+      ]
     },
     {
       name        = "ROOT"
       description = "System administrator with full access"
+      rules = [
+        {
+          path         = "/secret/*"
+          capabilities = ["create", "update", "delete"]
+        }
+      ]
     },
     {
       name        = "ADVISOR"
       description = "Academic advisor for institutions"
+      rules = [
+        {
+          path         = "/secret/*"
+          capabilities = ["create", "update", "delete"]
+        }
+      ]
     }
   ]
 }

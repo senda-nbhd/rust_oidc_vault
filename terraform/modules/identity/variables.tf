@@ -31,23 +31,9 @@ variable "roles" {
   type = list(object({
     name        = string
     description = string
+    rules = set(object({
+      path = string
+      capabilities = list(string)
+    }))
   }))
-  default = [
-    {
-      name        = "ADMIN"
-      description = "Administrator role with full access"
-    },
-    {
-      name        = "USER"
-      description = "Standard user role with limited access"
-    },
-    {
-      name        = "SPECTATOR"
-      description = "Read-only role for viewing data"
-    },
-    {
-      name        = "ACADEMIC_ADVISOR"
-      description = "Role for academic advisors with specialized permissions"
-    }
-  ]
 }
