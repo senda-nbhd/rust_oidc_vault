@@ -65,6 +65,8 @@ resource "vault_jwt_auth_backend_role" "team_member_role" {
     preferred_username = "username"
     email              = "email"
   }
+
+  allowed_redirect_uris = var.vault_auth_backend_allowed_redirect_uris
 }
 
 # Create a Vault role for team captains (using JWT/OIDC auth)
@@ -88,6 +90,7 @@ resource "vault_jwt_auth_backend_role" "team_captain_role" {
     preferred_username = "username"
     email              = "email"
   }
+  allowed_redirect_uris = var.vault_auth_backend_allowed_redirect_uris
 }
 
 # Create a team KV store if enabled

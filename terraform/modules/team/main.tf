@@ -53,10 +53,22 @@ resource "keycloak_user_roles" "team_user_roles" {
   ]
 }
 
+# Create team groups as subgroups of regions
+resource "keycloak_group" "team_group" {
+  
+  realm_id  = var.realm_id
+  name      = var.team_name
+  parent_id = var.teams_parent_id
+  
+  attributes = {
+    "team_description" = var.team_description
+  }
+}
+
 # Add users to the team group
 resource "keycloak_group_memberships" "team_memberships" {
   realm_id = var.realm_id
-  group_id = var.team_group_id
+  group_id = keycloak_group.team_group.id
   
   members = [
     for username, user in keycloak_user.team_users : user.username

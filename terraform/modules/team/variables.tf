@@ -14,8 +14,8 @@ variable "team_description" {
   default     = ""
 }
 
-variable "team_group_id" {
-  description = "The ID of the team group"
+variable "teams_parent_id" {
+  description = "The ID of the parent team group"
   type        = string
 }
 
@@ -59,7 +59,13 @@ variable "create_team_kv_store" {
 variable "vault_auth_backend_path" {
   description = "Path to the Vault JWT/OIDC auth backend"
   type        = string
-  default     = "oidc-user"
+  default     = "oidc"
+}
+
+variable "vault_auth_backend_allowed_redirect_uris" {
+  description = "List of allowed redirect URIs for the Vault JWT/OIDC auth backend"
+  type        = list(string)
+  default     = []
 }
 
 variable "client_id" {

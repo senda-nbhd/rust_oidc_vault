@@ -5,14 +5,15 @@ module "team1" {
   realm_id            = keycloak_realm.realm.id
   team_name           = "Team1"
   team_description    = "Team for authentication testing"
-  team_group_id       = lookup(module.identity.groups, "Team1", "")
+  teams_parent_id       = module.identity.teams_parent_id
   institution_group_id = lookup(module.identity.groups, "School1", "")
   realm_roles         = module.identity.roles
   
   # Vault configuration
   create_vault_roles      = true
   create_team_kv_store    = true
-  vault_auth_backend_path = "oidc-user"
+  vault_auth_backend_path = vault_jwt_auth_backend.keycloak.path
+  vault_auth_backend_allowed_redirect_uris = vault_jwt_auth_backend_role.default.allowed_redirect_uris
   client_id               = keycloak_openid_client.app_client.client_id
   
   users = [
@@ -50,14 +51,15 @@ module "team2" {
   realm_id            = keycloak_realm.realm.id
   team_name           = "Team2"
   team_description    = "Team for authentication testing"
-  team_group_id       = lookup(module.identity.groups, "Team2", "")
+  teams_parent_id       = module.identity.teams_parent_id
   institution_group_id = lookup(module.identity.groups, "School1", "")
   realm_roles         = module.identity.roles
   
   # Vault configuration
   create_vault_roles      = true
   create_team_kv_store    = true
-  vault_auth_backend_path = "oidc-user"
+  vault_auth_backend_path = vault_jwt_auth_backend.keycloak.path
+  vault_auth_backend_allowed_redirect_uris = vault_jwt_auth_backend_role.default.allowed_redirect_uris
   client_id               = keycloak_openid_client.app_client.client_id
   
   users = [
@@ -95,14 +97,15 @@ module "team3" {
   realm_id            = keycloak_realm.realm.id
   team_name           = "Team3"
   team_description    = "Team for authentication testing"
-  team_group_id       = lookup(module.identity.groups, "Team3", "")
+  teams_parent_id       = module.identity.teams_parent_id
   institution_group_id = lookup(module.identity.groups, "School2", "")
   realm_roles         = module.identity.roles
   
   # Vault configuration
   create_vault_roles      = true
   create_team_kv_store    = true
-  vault_auth_backend_path = "oidc-user"
+  vault_auth_backend_path = vault_jwt_auth_backend.keycloak.path
+  vault_auth_backend_allowed_redirect_uris = vault_jwt_auth_backend_role.default.allowed_redirect_uris
   client_id               = keycloak_openid_client.app_client.client_id
   
   users = [
