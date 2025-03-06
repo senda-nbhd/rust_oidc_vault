@@ -17,9 +17,9 @@ terraform {
 locals {
   # Create a map of team members by role for easier processing
   team_members = {
-    captain   = [for user in var.users : user if user.role == "CAPTAIN"]
-    students  = [for user in var.users : user if user.role == "STUDENT"]
-    spectators = [for user in var.users : user if user.role == "SPECTATOR"]
+    captain   = [for user in var.users : user if user.role == "captain"]
+    students  = [for user in var.users : user if user.role == "student"]
+    spectators = [for user in var.users : user if user.role == "spectator"]
   }
 }
 

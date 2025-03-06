@@ -1,3 +1,12 @@
+# App roles
+resource "keycloak_role" "app_roles" {
+  for_each    = { for role in local.roles : role.name => role }
+  
+  realm_id    = keycloak_realm.realm.id
+  name        = each.key
+  description = each.value.description
+}
+
 #------------------------------------------------------------------------------#
 # Keycloak Realm
 #------------------------------------------------------------------------------#
@@ -151,6 +160,21 @@ resource "keycloak_openid_user_attribute_protocol_mapper" "region_code_mapper" {
   claim_name        = "region_code"
   claim_value_type  = "String"
   
+  add_to_id_token     = true
+  add_to_access_token = true
+  add_to_userinfo     = true
+}
+
+# Create openid client role protocol mapper to include roles in tokens
+resource "keycloak_openid_user_realm_role_protocol_mapper" "realm_roles_mapper" {
+  realm_id    = keycloak_realm.realm.id
+  client_id   = keycloak_openid_client.app_client.id
+  name        = "realm-roles-mapper"
+  
+  claim_name  = "roles"
+  multivalued = true
+  
+  # Include roles in both ID and access tokens
   add_to_id_token     = true
   add_to_access_token = true
   add_to_userinfo     = true

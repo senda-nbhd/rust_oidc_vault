@@ -1,3 +1,10 @@
+# Create team groups as subgroups of regions
+resource "keycloak_group" "teams_parent" {
+  realm_id  = keycloak_realm.realm.id
+  name      = "Teams"
+}
+
+
 # Team1 setup
 module "team1" {
   source = "./modules/team"
@@ -5,9 +12,9 @@ module "team1" {
   realm_id            = keycloak_realm.realm.id
   team_name           = "Team1"
   team_description    = "Team for authentication testing"
-  teams_parent_id       = module.identity.teams_parent_id
-  institution_group_id = lookup(module.identity.groups, "School1", "")
-  realm_roles         = module.identity.roles
+  teams_parent_id       = keycloak_group.teams_parent.id
+  institution_group_id = module.school1.institution_group_id
+  realm_roles         = local.roles_map
   
   # Vault configuration
   create_vault_roles      = true
@@ -23,7 +30,7 @@ module "team1" {
       first_name = "Charles"
       last_name  = "Student"
       password   = "admin"
-      role       = "CAPTAIN"
+      role       = "captain"
     },
     {
       username   = "member1"
@@ -31,7 +38,7 @@ module "team1" {
       first_name = "Mike"
       last_name  = "Student"
       password   = "member"
-      role       = "STUDENT"
+      role       = "student"
     },
     {
       username   = "viewer1"
@@ -39,7 +46,7 @@ module "team1" {
       first_name = "Smith"
       last_name  = "Student"
       password   = "viewer"
-      role       = "SPECTATOR"
+      role       = "spectator"
     }
   ]
 }
@@ -51,9 +58,9 @@ module "team2" {
   realm_id            = keycloak_realm.realm.id
   team_name           = "Team2"
   team_description    = "Team for authentication testing"
-  teams_parent_id       = module.identity.teams_parent_id
-  institution_group_id = lookup(module.identity.groups, "School1", "")
-  realm_roles         = module.identity.roles
+  teams_parent_id       = keycloak_group.teams_parent.id
+  institution_group_id = module.school1.institution_group_id
+  realm_roles         = local.roles_map
   
   # Vault configuration
   create_vault_roles      = true
@@ -69,7 +76,7 @@ module "team2" {
       first_name = "Clara"
       last_name  = "Student"
       password   = "admin"
-      role       = "CAPTAIN"
+      role       = "captain"
     },
     {
       username   = "member2"
@@ -77,7 +84,7 @@ module "team2" {
       first_name = "Megan"
       last_name  = "Student"
       password   = "member"
-      role       = "STUDENT"
+      role       = "student"
     },
     {
       username   = "viewer2"
@@ -85,7 +92,7 @@ module "team2" {
       first_name = "Stephanie"
       last_name  = "Student"
       password   = "viewer"
-      role       = "SPECTATOR" 
+      role       = "spectator" 
     }
   ]
 }
@@ -97,9 +104,9 @@ module "team3" {
   realm_id            = keycloak_realm.realm.id
   team_name           = "Team3"
   team_description    = "Team for authentication testing"
-  teams_parent_id       = module.identity.teams_parent_id
-  institution_group_id = lookup(module.identity.groups, "School2", "")
-  realm_roles         = module.identity.roles
+  teams_parent_id       = keycloak_group.teams_parent.id
+  institution_group_id = module.school2.institution_group_id
+  realm_roles         = local.roles_map
   
   # Vault configuration
   create_vault_roles      = true
@@ -115,7 +122,7 @@ module "team3" {
       first_name = "Clara"
       last_name  = "Student"
       password   = "admin"
-      role       = "CAPTAIN"
+      role       = "captain"
     },
     {
       username   = "member3"
@@ -123,7 +130,7 @@ module "team3" {
       first_name = "Megan"
       last_name  = "Student"
       password   = "member"
-      role       = "STUDENT"
+      role       = "student"
     },
     {
       username   = "viewer3"
@@ -131,7 +138,7 @@ module "team3" {
       first_name = "Stephanie"
       last_name  = "Student"
       password   = "viewer"
-      role       = "SPECTATOR"
+      role       = "spectator"
     }
   ]
 }

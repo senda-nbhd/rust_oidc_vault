@@ -21,6 +21,32 @@ locals {
   app_url = "http://localhost:4040"
   keycloak_url = "http://keycloak:8080"
   vault_url = "http://vault:8200"
+
+
+  roles = [
+    {
+      name        = "captain"
+      description = "Team captain with administrative privileges"
+    },
+    {
+      name        = "student"
+      description = "Regular team member"
+    },
+    {
+      name        = "spectator"
+      description = "Read-only access to team resources"
+    },
+    {
+      name        = "root"
+      description = "System administrator with full access"
+    },
+    {
+      name        = "advisor"
+      description = "Academic advisor for institutions"
+    }
+  ]
+
+  roles_map = { for role in keycloak_role.app_roles : role.name => role.id }
 }
 
 provider "vault" {
