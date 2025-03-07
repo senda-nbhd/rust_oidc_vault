@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 use vaultrs::api::sys::responses::ListPoliciesResponse;
-use vaultrs::api::token::requests::CreateTokenRequestBuilder;
+use vaultrs::api::token::requests::{CreateRoleTokenRequestBuilder, CreateTokenRequestBuilder};
 use vaultrs::client::{VaultClient, VaultClientSettingsBuilder};
 use vaultrs::error::ClientError;
 use vaultrs::kv2;
@@ -186,11 +186,10 @@ impl VaultService {
         };
 
         // Create a Vault client authenticated as the user via OIDC
-        let user_client = self.create_user_vault_client(&id_token_str, vault_role).await?;
+        let user_client = self.create_user_vault_client(&id_token_str, vault_role.clone()).await?;
         tracing::debug!("User Vault client created");
         // Prepare token creation parameters using builder
-        let mut builder = CreateTokenRequestBuilder::default();
-
+        let mut builder = CreateRoleTokenRequestBuilder::default();
         // Set display name
         let timestamp = Self::current_timestamp().unwrap_or(0);
         let display_name = format!("api-token-{}-{}", identity.username, timestamp);
@@ -203,7 +202,15 @@ impl VaultService {
         builder.meta(metadata);
         tracing::debug!("Token metadata set");
         // Create the token using the user's Vault client with the builder
-        let token_result = vaultrs::token::new(&user_client, Some(&mut builder))
+
+        let token_role = match (&identity.team, &identity.role) {
+            (Some(team), Role::Captain) => Some(format!("team-{}-captain", team.name)),
+            (Some(team), _) => Some(format!("team-{}-member", team.name)),
+            (None, Role::Admin) => Some("global-admin".to_string()),
+            (None, Role::Spectator) => Some("global-spectator".to_string()),
+            _ => None,
+        };
+        let token_result = vaultrs::token::new_role(&user_client, &token_role.unwrap(), Some(&mut builder))
             .await
             .map_err(|e| VaultError::TokenCreationError(e.to_string()))?;
         tracing::debug!("Token created successfully");

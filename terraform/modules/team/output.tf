@@ -32,7 +32,7 @@ output "vault_policies" {
   description = "The Vault policies created for this team"
   value = {
     team_read_policy  = vault_policy.team_read_policy.name
-    team_admin_policy = vault_policy.team_admin_policy.name
+    team_captain_policy = vault_policy.team_captain_policy.name
   }
 }
 
