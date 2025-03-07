@@ -213,17 +213,17 @@ pub async fn run(identifier: AiclIdentifier, error_handler: AppErrorHandler) {
         // Team resources
         .route("/api/teams/view", get(view_teams))
         .route("/api/teams/edit", post(edit_teams))
-        .route("/api/teams/:team_id/resources", get(list_team_resources))
-        .route("/api/teams/:team_id/resources", post(create_team_resource))
-        .route("/api/teams/:team_id/resources/:resource_id", get(get_team_resource))
-        .route("/api/teams/:team_id/resources/:resource_id", post(update_team_resource))
-        .route("/api/teams/:team_id/resources/:resource_id", delete(delete_team_resource))
+        .route("/api/teams/{team_id}/resources", get(list_team_resources))
+        .route("/api/teams/{team_id}/resources", post(create_team_resource))
+        .route("/api/teams/{team_id}/resources/{resource_id}", get(get_team_resource))
+        .route("/api/teams/{team_id}/resources/{resource_id}", post(update_team_resource))
+        .route("/api/teams/{team_id}/resources/{resource_id}", delete(delete_team_resource))
 
         // Institution resources
-        .route("/api/institutions/:institution_id/resources", get(list_institution_resources))
-        .route("/api/institutions/:institution_id/resources", post(create_institution_resource))
-        .route("/api/institutions/:institution_id/resources/:resource_id", get(get_institution_resource))
-        .route("/api/institutions/:institution_id/resources/:resource_id", post(update_institution_resource))
+        .route("/api/institutions/{institution_id}/resources", get(list_institution_resources))
+        .route("/api/institutions/{institution_id}/resources", post(create_institution_resource))
+        .route("/api/institutions/{institution_id}/resources/{resource_id}", get(get_institution_resource))
+        .route("/api/institutions/{institution_id}/resources/{resource_id}", post(update_institution_resource))
         
         // Admin-only endpoints
         .route("/api/admin", get(admin_only))
@@ -279,7 +279,7 @@ async fn create_token(
     let oidc_token = session
         .get::<KeyCloakToken>(TOKEN_KEY)
         .await
-        .map_err(|e| {
+        .map_err(|_| {
             error_handler.handle_error(AppError::internal_error("Error retrieving OIDC token from session"))
         })?
         .ok_or(error_handler.handle_error(AppError::forbidden("No OIDC token found in session")))?;

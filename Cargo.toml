@@ -31,6 +31,10 @@ tower-sessions-sqlx-store = { version = "0.15.0", features = ["postgres"] }
 url = "2.5.4"
 headers = "0.4.0"
 
+[features]
+# Defines a feature named `webp` that does not enable any other features.
+test-utils = []
+
 [dev-dependencies]
 base64 = "0.22.1"
 headless_chrome = "1.0.17"

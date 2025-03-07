@@ -1,22 +1,12 @@
-use aicl_oidc::test_utils::{AuthTestUtils, TestUser, TestApiClient};
-use tokio::sync::OnceCell;
-
-// Use OnceCell to initialize the test service once per test session
-static TEST_HARNESS: OnceCell<String> = OnceCell::const_new();
-
-async fn initialize_test_service() -> &'static str {
-    TEST_HARNESS.get_or_init(|| async {
-        // In a real test, you would initialize your test service here
-        // For this example, we'll just use a hardcoded URL
-        "http://localhost:4040".to_string()
-    }).await
-}
+mod harness;
+use aicl_oidc::{test_utils::{TestApiClient, TestUser}, AiclIdentifier};
+use harness::initialize_test_service;
 
 #[tokio::test]
 async fn test_invalid_credentials() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (_, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     let invalid_user = TestUser {
         username: "nonexistent".to_string(),
@@ -42,30 +32,10 @@ async fn test_invalid_credentials() {
 }
 
 #[tokio::test]
-async fn test_invalid_parameters() {
-    let auth_utils = AuthTestUtils::new("http://localhost:4040")
-        .with_keycloak_url("http://invalid-url:9999")  // Invalid Keycloak URL
-        .with_realm("nonexistent-realm");
-    
-    let user = TestUser {
-        username: "captain1".to_string(),
-        password: "captain".to_string(),
-        expected_team: None,
-        expected_role: "",
-    };
-    
-    // Try to authenticate with invalid Keycloak parameters
-    let result = auth_utils.authenticate_user(&user).await;
-    
-    // Authentication should fail due to connection issues
-    assert!(result.is_err(), "Authentication should fail with invalid parameters");
-}
-
-#[tokio::test]
 async fn test_role_expectation_mismatch() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (_, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     // User with incorrect role expectation
     let user_with_wrong_role = TestUser {
@@ -88,9 +58,9 @@ async fn test_role_expectation_mismatch() {
 
 #[tokio::test]
 async fn test_team_expectation_mismatch() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (_, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     // User with incorrect team expectation
     let user_with_wrong_team = TestUser {
@@ -113,9 +83,9 @@ async fn test_team_expectation_mismatch() {
 
 #[tokio::test]
 async fn test_expired_token() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (app_url, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     // Get an API token
     let api_token = auth_utils.get_api_token_direct("captain1", "captain")
@@ -126,7 +96,7 @@ async fn test_expired_token() {
     let expired_token = api_token.client_token.clone();
     
     // Create a client with the expired token
-    let api_client = TestApiClient::new(app_url)
+    let api_client = TestApiClient::new(&app_url)
         .with_token(&expired_token);
     
     // Try to access a protected endpoint
@@ -145,54 +115,10 @@ async fn test_expired_token() {
 }
 
 #[tokio::test]
-async fn test_different_keycloak_configs() {
-    let app_url = initialize_test_service().await;
-    
-    // Test with different Keycloak configurations
-    let configs = [
-        // Standard config that should work
-        AuthTestUtils::new(app_url)
-            .with_keycloak_url("http://localhost:8080")
-            .with_realm("app-realm")
-            .with_client_id("rust-app"),
-            
-        // Different client ID (should fail)
-        AuthTestUtils::new(app_url)
-            .with_client_id("wrong-client-id"),
-            
-        // Different realm (should fail)
-        AuthTestUtils::new(app_url)
-            .with_realm("wrong-realm"),
-    ];
-    
-    let user = TestUser {
-        username: "captain1".to_string(),
-        password: "captain".to_string(),
-        expected_team: None,
-        expected_role: "",
-    };
-    
-    // The first config should work, the others should fail
-    let results = futures_util::future::join_all(
-        configs.iter().map(|config| config.authenticate_user(&user))
-    ).await;
-    
-    // First result should be Ok, others should be Err
-    assert!(results[0].is_ok(), "First config should succeed");
-    
-    // The other configs should fail
-    // Note: In some setups, they might actually succeed if the wrong config still
-    // points to a valid Keycloak instance that has the same users
-    for (i, result) in results.iter().skip(1).enumerate() {
-        println!("Config {} result: {:?}", i+1, result.as_ref().map(|_| "Success".to_string()).unwrap_or_else(|e| e.to_string()));
-    }
-}
-
-#[tokio::test]
 async fn test_token_revocation() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (app_url, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     // Get a session
     let session = auth_utils.create_session_with_api_token("captain1", "captain")

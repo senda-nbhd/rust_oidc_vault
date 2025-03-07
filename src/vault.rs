@@ -111,30 +111,6 @@ impl VaultService {
         }
     }
 
-    // Verify that required policies exist in Vault
-    pub async fn verify_token_policies(&self) -> Result<(), VaultError> {
-        // List of required policies
-        let required_policies = vec!["admin", "team-admin", "team-member", "advisor", "readonly"];
-
-        // Get existing policies
-        let ListPoliciesResponse { policies } = vaultrs::sys::policy::list(&self.admin_client)
-            .await
-            .map_err(|e| VaultError::ClientError(e))?;
-
-        // Check if all required policies exist
-        for policy in required_policies {
-            if !policies.contains(&policy.to_string()) {
-                return Err(VaultError::TokenCreationError(format!(
-                    "Required policy '{}' is not configured in Vault",
-                    policy
-                )));
-            }
-        }
-
-        tracing::debug!("All required policies exist in Vault");
-        Ok(())
-    }
-
     // Get current Unix timestamp
     fn current_timestamp() -> Result<u64, VaultError> {
         SystemTime::now()

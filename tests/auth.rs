@@ -1,24 +1,13 @@
-use aicl_oidc::test_utils::{AuthTestUtils, TestUser};
-use tokio::sync::OnceCell;
+mod harness;
 
-// Use OnceCell to initialize the test service once per test session
-static TEST_HARNESS: OnceCell<String> = OnceCell::const_new();
-
-async fn initialize_test_service() -> &'static str {
-    TEST_HARNESS.get_or_init(|| async {
-        // In a real test, you would initialize your test service here
-        // For this example, we'll just use a hardcoded URL
-        "http://localhost:4040".to_string()
-    }).await
-}
+use aicl_oidc::{test_utils::TestUser, AiclIdentifier};
+use harness::initialize_test_service;
 
 #[tokio::test]
 async fn test_authenticate_captain() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url)
-        .with_client_id("rust-app")
-        .with_client_secret(Some("test-client-secret".to_string()));
+    let (app_url, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     let captain_user = TestUser {
         username: "captain1".to_string(),
@@ -50,9 +39,9 @@ async fn test_authenticate_captain() {
 
 #[tokio::test]
 async fn test_authenticate_student() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (_, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     let student_user = TestUser {
         username: "member1".to_string(),
@@ -77,9 +66,9 @@ async fn test_authenticate_student() {
 
 #[tokio::test]
 async fn test_authenticate_advisor() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (_, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     let advisor_user = TestUser {
         username: "advisor1".to_string(),
@@ -104,9 +93,9 @@ async fn test_authenticate_advisor() {
 
 #[tokio::test]
 async fn test_authenticate_admin() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (_, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     let admin_user = TestUser {
         username: "admin".to_string(),
@@ -129,9 +118,9 @@ async fn test_authenticate_admin() {
 
 #[tokio::test]
 async fn test_get_api_token_direct() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (_, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     // Get an API token directly
     let api_token = auth_utils.get_api_token_direct("captain1", "captain")
@@ -146,9 +135,9 @@ async fn test_get_api_token_direct() {
 
 #[tokio::test]
 async fn test_authenticate_multiple_users() {
-    let app_url = initialize_test_service().await;
-    
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (_, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     // Define multiple test users
     let test_users = vec![

@@ -64,49 +64,14 @@ impl AuthSession {
 
 /// Authentication test utilities
 pub struct AuthTestUtils {
-    app_url: String,
-    keycloak_url: String,
-    client_id: String,
-    client_secret: Option<String>,
-    realm: String,
+    pub app_url: String,
+    pub keycloak_url: String,
+    pub client_id: String,
+    pub client_secret: Option<String>,
+    pub realm: String,
 }
 
 impl AuthTestUtils {
-    /// Create a new instance of AuthTestUtils
-    pub fn new(app_url: &str) -> Self {
-        Self {
-            app_url: app_url.to_string(),
-            keycloak_url: "http://localhost:8080".to_string(),
-            client_id: "rust-app".to_string(),
-            client_secret: Some("test-client-secret".to_string()),
-            realm: "app-realm".to_string(),
-        }
-    }
-    
-    /// Customize the Keycloak URL
-    pub fn with_keycloak_url(mut self, url: &str) -> Self {
-        self.keycloak_url = url.to_string();
-        self
-    }
-    
-    /// Customize the client ID
-    pub fn with_client_id(mut self, client_id: &str) -> Self {
-        self.client_id = client_id.to_string();
-        self
-    }
-    
-    /// Customize the client secret
-    pub fn with_client_secret(mut self, client_secret: Option<String>) -> Self {
-        self.client_secret = client_secret;
-        self
-    }
-    
-    /// Customize the realm
-    pub fn with_realm(mut self, realm: &str) -> Self {
-        self.realm = realm.to_string();
-        self
-    }
-    
     /// Get OIDC client for direct authentication
     async fn get_oidc_client(&self) -> Result<KeycloakOidcClient, anyhow::Error> {
         let async_http_client = reqwest::ClientBuilder::new()

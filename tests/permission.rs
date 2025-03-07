@@ -1,21 +1,10 @@
-use aicl_oidc::{Role, test_utils::{AuthSession, AuthTestUtils}};
+mod harness;
+use aicl_oidc::{test_utils::{AuthSession, AuthTestUtils}, AiclIdentifier, Role};
 use std::collections::HashMap;
-use tokio::sync::OnceCell;
-
-// Use OnceCell to initialize the test service once per test session
-static TEST_HARNESS: OnceCell<String> = OnceCell::const_new();
-
-async fn initialize_test_service() -> &'static str {
-    TEST_HARNESS.get_or_init(|| async {
-        // In a real test, you would initialize your test service here
-        // For this example, we'll just use a hardcoded URL
-        "http://localhost:4040".to_string()
-    }).await
-}
+use harness::initialize_test_service;
 
 // Helper function to authenticate all test users and return a map by role
-async fn authenticate_users_by_role(app_url: &str) -> HashMap<Role, AuthSession> {
-    let auth_utils = AuthTestUtils::new(app_url);
+async fn authenticate_users_by_role(auth_utils: &AuthTestUtils) -> HashMap<Role, AuthSession> {
     let test_users = AuthTestUtils::create_test_users();
     
     let sessions = auth_utils.authenticate_users(&test_users).await;
@@ -108,10 +97,12 @@ async fn test_endpoint_access(
 
 #[tokio::test]
 async fn test_role_based_permissions() {
-    let app_url = initialize_test_service().await;
+    let (app_url, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     // Get sessions for all roles
-    let sessions_by_role = authenticate_users_by_role(app_url).await;
+    let sessions_by_role = authenticate_users_by_role(&auth_utils).await;
     
     // Define the endpoints to test
     let endpoints = [
@@ -132,7 +123,7 @@ async fn test_role_based_permissions() {
             test_endpoint_access(
                 session, 
                 endpoint, 
-                app_url, 
+                &app_url, 
                 should_have_access
             ).await;
         }
@@ -141,8 +132,9 @@ async fn test_role_based_permissions() {
 
 #[tokio::test]
 async fn test_team_isolation() {
-    let app_url = initialize_test_service().await;
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (app_url, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     // Authenticate captains from two different teams
     let captain1 = auth_utils.create_session_with_api_token("captain1", "captain")
@@ -188,8 +180,9 @@ async fn test_team_isolation() {
 
 #[tokio::test]
 async fn test_institution_isolation() {
-    let app_url = initialize_test_service().await;
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (app_url, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     // Authenticate advisors from different institutions
     let advisor1 = auth_utils.create_session_with_api_token("advisor1", "admin")
@@ -235,8 +228,9 @@ async fn test_institution_isolation() {
 
 #[tokio::test]
 async fn test_admin_override() {
-    let app_url = initialize_test_service().await;
-    let auth_utils = AuthTestUtils::new(app_url);
+    let (app_url, _guard) = initialize_test_service().await;
+    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+    let auth_utils = aicl_identifier.test_utils().await;
     
     // Authenticate as admin
     let admin = auth_utils.create_session_with_api_token("admin", "admin")

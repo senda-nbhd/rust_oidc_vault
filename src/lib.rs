@@ -4,7 +4,7 @@ pub mod idp;
 pub mod oidc;
 pub mod vault;
 
-
+#[cfg(feature = "test-utils")]
 pub mod test_utils;
 
 use std::sync::Arc;
@@ -129,6 +129,23 @@ impl AiclIdentifier {
         );
 
         Ok(Self { oidc, vault, idp })
+    }
+
+    #[cfg(feature = "test-utils")]
+    pub async fn test_utils(&self) -> test_utils::AuthTestUtils {
+        use test_utils::AuthTestUtils;
+
+        let idp_config = self.vault
+            .get_idp_config_from_vault()
+            .await
+            .expect("Failed to get IDP config from Vault");
+        AuthTestUtils {
+            app_url: "http://localhost:4040".to_string(), 
+            keycloak_url: "http://keycloak:8080".to_string(),
+            client_id: idp_config.client_id,
+            client_secret: idp_config.client_secret,
+            realm: idp_config.realm.unwrap(),
+        }
     }
 
     pub fn identifier_layer(&self) -> IdentifierLayer {
