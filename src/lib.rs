@@ -4,6 +4,9 @@ pub mod idp;
 pub mod oidc;
 pub mod vault;
 
+
+pub mod test_utils;
+
 use std::sync::Arc;
 
 use anyhow::Context;

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 use vaultrs::api::sys::responses::ListPoliciesResponse;
-use vaultrs::api::token::requests::{CreateRoleTokenRequestBuilder, CreateTokenRequestBuilder};
+use vaultrs::api::token::requests::CreateRoleTokenRequestBuilder;
 use vaultrs::client::{VaultClient, VaultClientSettingsBuilder};
 use vaultrs::error::ClientError;
 use vaultrs::kv2;

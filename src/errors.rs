@@ -5,7 +5,7 @@ use axum::{
 use std::fmt;
 use thiserror::Error;
 
-use crate::{idp::ext::IdpError, oidc::ext::OidcError, vault::VerificationError};
+use crate::{idp::ext::IdpError, oidc::ext::OidcError, vault::{VaultError, VerificationError}};
 
 // Existing identifier error
 #[derive(Debug, Error)]
@@ -32,6 +32,9 @@ pub enum AppError {
 
     #[error("Identity provider error: {0}")]
     IdentityProvider(#[from] IdpError),
+
+    #[error("Vault provider error: {0}")]
+    Vault(#[from] VaultError),
 
     #[error("Identifier error: {0}")]
     Identifier(#[from] IdentifierError),
@@ -66,6 +69,7 @@ impl AppError {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Session(_)
+            | Self::Vault(_)
             | Self::IdentityProvider(_)
             | Self::Identifier(_)
             | Self::InternalServer(_) => StatusCode::INTERNAL_SERVER_ERROR,

@@ -3,19 +3,20 @@ mod harness;
 use aicl_oidc::vault::ApiToken;
 use headless_chrome::{Browser, Tab};
 use reqwest::{header::{HeaderMap, AUTHORIZATION}, Client};
+pub const APP_URL: &str = "http://localhost:4040";
 
 // Separate tests for each authentication flow scenario
 #[tracing_test::traced_test]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_end_to_end_access() {
     // Initialize service and get guard that will decrement reference count when dropped
-    let (app_url, _guard) = harness::initialize_test_service().await;
+    let (_, _guard) = harness::initialize_test_service().await;
 
-    let browser = Browser::default().expect("Failed to start browser");
+    let browser = Browser::default().expect("Failed to create browser");
     let tab = browser.new_tab().expect("Failed to open tab");
-    tracing::info!("Opening browser and navigating to {}/bar", app_url);
+    tracing::info!("Opening browser and navigating to {}/bar", APP_URL);
     // Navigate to the maybe_authenticated endpoint
-    tab.navigate_to(&format!("{}/bar", app_url))
+    tab.navigate_to(&format!("{}/bar", APP_URL))
         .expect("Failed to navigate to /bar");
 
     // Wait for the response and verify content
@@ -26,7 +27,7 @@ async fn test_end_to_end_access() {
     tracing::info!("✅ Unauthenticated access test passed");
 
     // Navigate to the authenticated endpoint
-    tab.navigate_to(&format!("{}/foo", app_url))
+    tab.navigate_to(&format!("{}/foo", APP_URL))
         .expect("Failed to navigate to /foo");
 
     // Wait for redirect to Keycloak login page
@@ -64,7 +65,7 @@ async fn test_end_to_end_access() {
     assert!(body.contains("Team1"), "Response should contain team info");
 
     // Test accessing maybe_authenticated endpoint while authenticated
-    tab.navigate_to(&format!("{}/bar", app_url))
+    tab.navigate_to(&format!("{}/bar", APP_URL))
         .expect("Failed to navigate to /bar");
 
     // Wait for the response and verify content
@@ -80,7 +81,7 @@ async fn test_end_to_end_access() {
     );
 
     // Logout
-    tab.navigate_to(&format!("{}/logout", app_url))
+    tab.navigate_to(&format!("{}/logout", APP_URL))
         .expect("Failed to navigate to /logout");
 
     // Wait for redirect to complete
@@ -90,7 +91,7 @@ async fn test_end_to_end_access() {
     tracing::info!("✅ OIDC session authentication test passed");
     
     // Navigate to the authenticated endpoint
-    tab.navigate_to(&format!("{}/token", app_url))
+    tab.navigate_to(&format!("{}/token", APP_URL))
         .expect("Failed to navigate to /token");
 
     // Wait for redirect to Keycloak login page
@@ -133,7 +134,7 @@ async fn test_end_to_end_access() {
     // Create a new HTTP client for token authentication (no cookies needed)
     let api_client = Client::new();
     let api_response = api_client
-        .get(format!("{}/api/protected", app_url))
+        .get(format!("{}/api/protected", APP_URL))
         .header(AUTHORIZATION, format!("Bearer {}", token.client_token))
         .send()
         .await

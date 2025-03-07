@@ -19,7 +19,7 @@ use tower_sessions::Session;
 use url::Url;
 use uuid::Uuid;
 
-use crate::idp::{admin::IdpAdmin, keycloak::KeycloakProvider};
+use crate::idp::admin::IdpAdmin;
 
 use super::ext::OidcError;
 
