@@ -7,7 +7,7 @@ use reqwest::{header::{HeaderMap, AUTHORIZATION}, Client};
 // Separate tests for each authentication flow scenario
 #[tracing_test::traced_test]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_unauthenticated_access() {
+async fn test_end_to_end_access() {
     // Initialize service and get guard that will decrement reference count when dropped
     let (app_url, _guard) = harness::initialize_test_service().await;
 
@@ -24,17 +24,6 @@ async fn test_unauthenticated_access() {
     assert_eq!(body, "Hello anon!");
 
     tracing::info!("✅ Unauthenticated access test passed");
-    // Guard will be dropped here, decrementing the reference count
-}
-
-#[tracing_test::traced_test]
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_oidc_session_authentication() {
-    // Initialize service and get guard
-    let (app_url, _guard) = harness::initialize_test_service().await;
-
-    let browser = Browser::default().expect("Failed to start browser");
-    let tab = browser.new_tab().expect("Failed to open tab");
 
     // Navigate to the authenticated endpoint
     tab.navigate_to(&format!("{}/foo", app_url))
@@ -99,16 +88,6 @@ async fn test_oidc_session_authentication() {
         .expect("Failed to navigate after logout");
 
     tracing::info!("✅ OIDC session authentication test passed");
-    // Guard will be dropped here, decrementing the reference count
-}
-
-#[tracing_test::traced_test]
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_token_authentication() {
-    // Initialize service and get guard
-    let (app_url, _guard) = harness::initialize_test_service().await;
-    let browser = Browser::default().expect("Failed to start browser");
-    let tab = browser.new_tab().expect("Failed to open tab");
     
     // Navigate to the authenticated endpoint
     tab.navigate_to(&format!("{}/token", app_url))
@@ -137,27 +116,20 @@ async fn test_token_authentication() {
     // Wait for redirect back to application
     tab.wait_until_navigated()
         .expect("Failed to navigate back to application");
-    let token = tab.get_content()
-        .expect("Failed to get document after navigation");
-    tracing::info!(token, "Have token");
-    
-    // Step 2: Now that we're authenticated, request a token
-    let client = Client::new();
-    let token_response = client.post(format!("{}/token", app_url))
-        .send()
-        .await
-        .expect("Failed to request token");
-    
-    assert!(token_response.status().is_success(), 
-            "Token request should succeed, got: {}", token_response.status());
-    
+    let body = tab
+        .wait_for_element("body")
+        .expect("Element not found")
+        .get_inner_text()
+        .expect("Failed to get inner text");
+    tracing::info!(body, "Successfully logged in with username: captain1");
+    let token = serde_json::from_str::<ApiToken>(&body)
+        .expect("Failed to parse claims from response");
     // Parse the token from the response
-    let token: ApiToken = token_response.json().await
-        .expect("Failed to parse token from response");
     
     tracing::info!("Successfully created API token: {}", token.client_token);
     
-    // Step 3: Use the token to access a protected endpoint
+    
+    // Step 2: Use the token to access a protected endpoint
     // Create a new HTTP client for token authentication (no cookies needed)
     let api_client = Client::new();
     let api_response = api_client

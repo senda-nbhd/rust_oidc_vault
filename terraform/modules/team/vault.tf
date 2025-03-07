@@ -103,6 +103,26 @@ resource "vault_jwt_auth_backend_role" "team_captain_role" {
   }
 }
 
+resource "vault_token_auth_backend_role" "team_captain_token_role" {
+  role_name        = "team-${var.team_name}-captain"
+  allowed_policies = [vault_policy.team_captain_policy.name]
+  orphan           = true
+  renewable        = true
+  token_period     = 86400  # 24 hours
+  token_explicit_max_ttl = 604800  # 7 days
+  path_suffix      = "team-${var.team_name}-captain" 
+}
+
+resource "vault_token_auth_backend_role" "team_member_token_role" {
+  role_name        = "team-${var.team_name}-member"
+  allowed_policies = [vault_policy.team_read_policy.name]
+  orphan           = true
+  renewable        = true
+  token_period     = 86400  # 24 hours
+  token_explicit_max_ttl = 604800  # 7 days
+  path_suffix      = "team-${var.team_name}-member"
+}
+
 # Create a team KV store if enabled
 resource "vault_kv_secret_v2" "team_secret" {
   count = var.create_team_kv_store ? 1 : 0

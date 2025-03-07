@@ -128,7 +128,7 @@ pub async fn run(identifier: AiclIdentifier, error_handler: AppErrorHandler) {
     let app = app
         .route("/foo", get(authenticated))
         .route_service("/logout", identifier.logout_service())
-        .route("/token", post(create_token))
+        .route("/token", get(create_token))
         .route("/api/protected", get(token_authenticated))
         .layer(identifier.login_layer())
         .route("/bar", get(maybe_authenticated))
@@ -167,7 +167,7 @@ async fn create_token(
     identity: AiclIdentity,
     session: Session,
     identifier: AiclIdentifier,
-) -> Result<Json<ApiToken>, (StatusCode, String)> {
+) -> Result<String, (StatusCode, String)> {
     // Get the vault service from the identifier
 
     // Get the OIDC token from the session
@@ -194,7 +194,7 @@ async fn create_token(
             )
         })?;
 
-    Ok(Json(token))
+    Ok(serde_json::to_string(&token).unwrap())
 }
 
 // Endpoint that requires token authentication

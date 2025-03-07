@@ -143,3 +143,14 @@ resource "vault_jwt_auth_backend_role" "global_spectator_role" {
     email              = "email"
   }
 }
+
+
+resource "vault_token_auth_backend_role" "global_admin_role" {
+  role_name        = "global-admin"
+  allowed_policies = [vault_policy.global_admin_policy.name]
+  orphan           = true
+  renewable        = true
+  token_period     = 86400  # 24 hours
+  token_explicit_max_ttl = 604800  # 7 days
+  path_suffix      = "global-admin" 
+}

@@ -16,8 +16,8 @@ path "secret/metadata/institutions/${var.institution_name}/*" {
   capabilities = ["read", "list"]
 }
 
-# Allow reading all teams under this institution
-path "secret/data/teams/byinstitution/${var.institution_name}/*" {
+# Allow reading all institutions under this institution
+path "secret/data/institutions/byinstitution/${var.institution_name}/*" {
   capabilities = ["read", "list"]
 }
 EOT
@@ -38,8 +38,8 @@ path "secret/metadata/institutions/${var.institution_name}/*" {
   capabilities = ["read", "list", "delete"]
 }
 
-# Allow reading all teams under this institution
-path "secret/data/teams/byinstitution/${var.institution_name}/*" {
+# Allow reading all institutions under this institution
+path "secret/data/institutions/byinstitution/${var.institution_name}/*" {
   capabilities = ["read", "list", "update"]
 }
 
@@ -102,6 +102,27 @@ resource "vault_jwt_auth_backend_role" "institution_advisor_role" {
     preferred_username = "username"
     email              = "email"
   }
+}
+
+
+resource "vault_token_auth_backend_role" "institution_advisor_token_role" {
+  role_name        = "institution-${var.institution_name}-advisor"
+  allowed_policies = [vault_policy.institution_advisor_policy.name]
+  orphan           = true
+  renewable        = true
+  token_period     = 86400  # 24 hours
+  token_explicit_max_ttl = 604800  # 7 days
+  path_suffix      = "institution-${var.institution_name}-advisor" 
+}
+
+resource "vault_token_auth_backend_role" "institution_spectator_token_role" {
+  role_name        = "institution-${var.institution_name}-spectator"
+  allowed_policies = [vault_policy.institution_read_policy.name]
+  orphan           = true
+  renewable        = true
+  token_period     = 86400  # 24 hours
+  token_explicit_max_ttl = 604800  # 7 days
+  path_suffix      = "institution-${var.institution_name}-spectator"
 }
 
 # Create an institution KV store if enabled
