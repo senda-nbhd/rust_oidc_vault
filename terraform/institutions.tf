@@ -18,7 +18,6 @@ module "school1" {
   create_vault_roles           = true
   create_institution_kv_store  = true
   vault_auth_backend_path      = vault_jwt_auth_backend.keycloak.path
-  vault_auth_backend_allowed_redirect_uris = vault_jwt_auth_backend_role.default.allowed_redirect_uris
   client_id                    = keycloak_openid_client.app_client.client_id
   
   users = [
@@ -54,7 +53,6 @@ module "school2" {
   create_vault_roles           = true
   create_institution_kv_store  = true
   vault_auth_backend_path      = vault_jwt_auth_backend.keycloak.path
-  vault_auth_backend_allowed_redirect_uris = vault_jwt_auth_backend_role.default.allowed_redirect_uris
   client_id                    = keycloak_openid_client.app_client.client_id
   
   users = [

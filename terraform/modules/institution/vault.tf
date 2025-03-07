@@ -77,8 +77,6 @@ resource "vault_jwt_auth_backend_role" "institution_spectator_role" {
     preferred_username = "username"
     email              = "email"
   }
-  
-  allowed_redirect_uris = var.vault_auth_backend_allowed_redirect_uris
 }
 
 # Create a Vault role for institution advisors (using JWT/OIDC auth)
@@ -103,8 +101,6 @@ resource "vault_jwt_auth_backend_role" "institution_advisor_role" {
     preferred_username = "username"
     email              = "email"
   }
-  
-  allowed_redirect_uris = var.vault_auth_backend_allowed_redirect_uris
 }
 
 # Create an institution KV store if enabled

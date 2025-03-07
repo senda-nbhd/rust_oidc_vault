@@ -14,7 +14,7 @@ use vaultrs::kv2;
 
 use crate::idp::ext::IdpConfig;
 use crate::oidc::keycloak::KeyCloakToken;
-use crate::AiclIdentity;
+use crate::{AiclIdentity, Role};
 
 // API token structure returned to users
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -150,7 +150,7 @@ impl VaultService {
         role: Option<String>,
     ) -> Result<VaultClient, VaultError> {
         let login =
-            vaultrs::auth::oidc::login(&self.admin_client, &self.config.oidc_path, jwt, Some("team-Team1-captain".to_string()))
+            vaultrs::auth::oidc::login(&self.admin_client, &self.config.oidc_path, jwt, role)
                 .await?;
 
         // Create a new Vault client with the user's token
@@ -176,8 +176,16 @@ impl VaultService {
         let id_token_str = oidc_token.id_token.to_string();
         tracing::debug!(identity.username, "Creating API token for user");
 
+        let vault_role = match (&identity.team, &identity.role) {
+            (Some(team), Role::Captain) => Some(format!("team-{}-captain", team.name)),
+            (Some(team), _) => Some(format!("team-{}-member", team.name)),
+            (None, Role::Admin) => Some("global-admin".to_string()),
+            (None, Role::Spectator) => Some("global-spectator".to_string()),
+            _ => None,
+        };
+
         // Create a Vault client authenticated as the user via OIDC
-        let user_client = self.create_user_vault_client(&id_token_str, None).await?;
+        let user_client = self.create_user_vault_client(&id_token_str, vault_role).await?;
         tracing::debug!("User Vault client created");
         // Prepare token creation parameters using builder
         let mut builder = CreateTokenRequestBuilder::default();

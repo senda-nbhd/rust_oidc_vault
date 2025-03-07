@@ -121,8 +121,6 @@ resource "vault_jwt_auth_backend_role" "global_admin_role" {
     preferred_username = "username"
     email              = "email"
   }
-  
-  allowed_redirect_uris = vault_jwt_auth_backend_role.default.allowed_redirect_uris
 }
 
 # Create JWT/OIDC role for global spectators
@@ -144,6 +142,4 @@ resource "vault_jwt_auth_backend_role" "global_spectator_role" {
     preferred_username = "username"
     email              = "email"
   }
-  
-  allowed_redirect_uris = vault_jwt_auth_backend_role.default.allowed_redirect_uris
 }
