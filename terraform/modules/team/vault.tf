@@ -59,8 +59,9 @@ resource "vault_jwt_auth_backend_role" "team_member_role" {
   bound_audiences = [var.client_id]
   user_claim      = "sub"
   bound_claims    = {
-    "groups" = "Teams/${var.team_name}"
+    "groups" = "/Teams/${var.team_name}"
   }
+  groups_claim = "groups"
   
   claim_mappings = {
     preferred_username = "username"
@@ -82,9 +83,10 @@ resource "vault_jwt_auth_backend_role" "team_captain_role" {
   bound_audiences = [var.client_id]
   user_claim      = "sub"
   bound_claims    = {
-    "groups" = "Teams/${var.team_name}",
     "roles"  = "captain"
+    "groups" = "/Teams/${var.team_name}"
   }
+  groups_claim = "groups"
   
   claim_mappings = {
     preferred_username = "username"

@@ -18,7 +18,7 @@ pub async fn run(identifier: AiclIdentifier, error_handler: AppErrorHandler) {
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false)
         .with_same_site(SameSite::Lax)
-        .with_expiry(Expiry::OnInactivity(Duration::seconds(120)));
+        .with_expiry(Expiry::OnInactivity(Duration::hours(1)));
 
     let app: Router<()> = Router::new();
 

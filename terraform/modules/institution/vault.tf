@@ -69,10 +69,10 @@ resource "vault_jwt_auth_backend_role" "institution_spectator_role" {
   bound_audiences = [var.client_id]
   user_claim      = "sub"
   bound_claims    = {
-    "groups" = "Institutions/${var.institution_name}"
-    "roles"  = "SPECTATOR"
+    "roles"  = "spectator"
+    groups = "/Institutions/${var.institution_name}"
   }
-  
+  groups_claim = "groups"
   claim_mappings = {
     preferred_username = "username"
     email              = "email"
@@ -93,9 +93,10 @@ resource "vault_jwt_auth_backend_role" "institution_advisor_role" {
   bound_audiences = [var.client_id]
   user_claim      = "sub"
   bound_claims    = {
-    "groups" = "Institutions/${var.institution_name}",
-    "roles"  = "ADVISOR"
+    "roles"  = "advisor"
+    groups = "/Institutions/${var.institution_name}"
   }
+  groups_claim = "groups"
   
   claim_mappings = {
     preferred_username = "username"

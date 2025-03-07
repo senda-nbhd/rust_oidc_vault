@@ -149,6 +149,7 @@ impl VaultService {
         jwt: &str,
         role: Option<String>,
     ) -> Result<VaultClient, VaultError> {
+        tracing::info!("Creating a new Vault client for the user");
         let login =
             vaultrs::auth::oidc::login(&self.admin_client, &self.config.oidc_path, jwt, role)
                 .await?;
