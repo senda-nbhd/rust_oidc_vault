@@ -6,7 +6,6 @@ use moka::future::{Cache, CacheBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
-use vaultrs::api::sys::responses::ListPoliciesResponse;
 use vaultrs::api::token::requests::CreateRoleTokenRequestBuilder;
 use vaultrs::client::{VaultClient, VaultClientSettingsBuilder};
 use vaultrs::error::ClientError;
@@ -205,6 +204,7 @@ impl VaultService {
     // Verify an API token and extract the user ID
     async fn verify_token_inter(&self, token: &str) -> Result<uuid::Uuid, VerificationError> {
         // Lookup the token in Vault using the admin client
+        // todo!(Make this log in with the token instead of listing it)
         let lookup_result = vaultrs::token::lookup(&self.admin_client, token)
             .await
             .map_err(|e| VerificationError(e.to_string()))?;

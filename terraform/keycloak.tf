@@ -77,6 +77,7 @@ resource "keycloak_openid_client" "app_client" {
   valid_redirect_uris = [
     format("%s/*", local.app_url),
   ]
+  direct_access_grants_enabled = true 
 
   login_theme = "keycloak"
 }

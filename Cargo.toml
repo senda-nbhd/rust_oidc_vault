@@ -31,14 +31,15 @@ tower-sessions-sqlx-store = { version = "0.15.0", features = ["postgres"] }
 url = "2.5.4"
 headers = "0.4.0"
 
+base64 = "0.22.1"
+
 [features]
 # Defines a feature named `webp` that does not enable any other features.
 test-utils = []
 
 [dev-dependencies]
-base64 = "0.22.1"
 headless_chrome = "1.0.17"
 lazy_static = "1.5.0"
 reqwest = { version = "0.12.12", features = ["cookies"] }
-tracing-test = "0.2.5"
+tracing-test = { version = "0.2.5", features = ["no-env-filter"] }
 

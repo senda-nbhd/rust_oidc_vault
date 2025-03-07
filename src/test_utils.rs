@@ -1,17 +1,22 @@
+use std::sync::Arc;
+
 use crate::{
-    oidc::keycloak::{KeyCloakToken, TOKEN_KEY},
-    vault::ApiToken,
-    AiclIdentity
+    idp::admin::IdpAdmin, oidc::keycloak::{KeyCloakToken, TOKEN_KEY}, vault::{ApiToken, VaultService}, AiclIdentity
 };
+
+use anyhow::Context;
 use futures_util::future::join_all;
 use openidconnect::{
     ClientId, ClientSecret,
     IssuerUrl, OAuth2TokenResponse, ResourceOwnerPassword, ResourceOwnerUsername, 
     TokenResponse,
 };
-use reqwest::{Client, header::AUTHORIZATION};
-use serde::Serialize;
+use reqwest::{Client, header::AUTHORIZATION, cookie::Jar};
+use serde::{Deserialize, Serialize};
 use tracing::info;
+use base64::{engine::general_purpose::URL_SAFE, Engine as _};
+use url::Url;
+use uuid::Uuid;
 
 use crate::oidc::keycloak::{KeycloakMetadata, KeycloakOidcClient};
 
@@ -25,12 +30,12 @@ pub struct TestUser {
 }
 
 /// Represents authenticated session information
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AuthSession {
     pub identity: AiclIdentity,
     pub api_token: Option<ApiToken>,
     pub client: Client,
-    //pub token: Option<KeyCloakToken>,
+    pub token: Option<KeyCloakToken>,
 }
 
 impl AuthSession {
@@ -69,6 +74,8 @@ pub struct AuthTestUtils {
     pub client_id: String,
     pub client_secret: Option<String>,
     pub realm: String,
+    pub idp: Arc<IdpAdmin>,
+    pub vault: Arc<VaultService>,
 }
 
 impl AuthTestUtils {
@@ -102,19 +109,26 @@ impl AuthTestUtils {
     pub async fn authenticate_user(&self, user: &TestUser) -> Result<AuthSession, anyhow::Error> {
         info!("Authenticating user: {}", user.username);
         
+        let cookie_provider = Arc::new(Jar::default());
         // Step 1: Get OIDC client
         let client = self.get_oidc_client().await?;
         let http_client = reqwest::ClientBuilder::new()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()?;
+            .cookie_provider(cookie_provider.clone())
+            .redirect(reqwest::redirect::Policy::limited(10))
+            .build()
+            .unwrap();
         // Step 2: Perform Resource Owner Password Credentials flow
         let token_response = client
             .exchange_password(
                 &ResourceOwnerUsername::new(user.username.clone()),
                 &ResourceOwnerPassword::new(user.password.clone())
             )?
+            .add_scope(openidconnect::Scope::new("openid".to_string()))
+            // Add additional scopes if needed
+            .add_scope(openidconnect::Scope::new("profile".to_string()))
+            .add_scope(openidconnect::Scope::new("email".to_string()))
             .request_async(&http_client)
-            .await?;
+            .await.with_context(|| "Failed to request token")?;
         // Create the KeyCloakToken from the token response
         let id_token = token_response
             .id_token()
@@ -127,28 +141,10 @@ impl AuthTestUtils {
             id_token,
             access_token,
         };
-            
-        // Step 4: Get the user identity from the application
-        // First, we need to set up a client that includes the tokens
-        let identity_url = format!("{}/foo", self.app_url);
-        let mut req = http_client.get(&identity_url);
-        
-        // Add the ID token as a cookie (this would normally be done by the login flow)
-        req = req.header(
-            "Cookie", 
-            format!("{}={}; Path=/; HttpOnly", TOKEN_KEY, serde_json::to_string(&keycloak_token)?)
-        );
-        
-        // Execute the request
-        let identity_response = req.send().await?;
-        
-        if !identity_response.status().is_success() {
-            let error_text = identity_response.text().await?;
-            return Err(anyhow::anyhow!("Failed to get identity info: {}", error_text));
-        }
-        
-        // Parse the identity from the response
-        let identity: AiclIdentity = identity_response.json().await?;
+
+        let user_id = decode_token_claims(&keycloak_token.id_token.to_string()).with_context(|| "unable to decode the sub claim")?;
+        // Step 4: Fetch the user's identity from KeyCloak
+        let identity = self.idp.get_domain_user(user_id).await.with_context(|| "Failed to fetch user identity from KeyCloak")?;
         
         // Step 5: Validate identity against expectations
         if let Some(expected_team) = &user.expected_team {
@@ -173,30 +169,20 @@ impl AuthTestUtils {
             ));
         }
         
-        // Step 6: Get an API token
-        let mut token_req = http_client.get(&format!("{}/token", self.app_url));
-        
-        // Add the ID token as a cookie
-        token_req = token_req.header(
-            "Cookie", 
-            format!("{}={}; Path=/; HttpOnly", TOKEN_KEY, serde_json::to_string(&keycloak_token)?)
-        );
-        
-        let token_response = token_req.send().await?;
-        
-        if !token_response.status().is_success() {
-            let error_text = token_response.text().await?;
-            return Err(anyhow::anyhow!("Failed to get API token: {}", error_text));
-        }
-        
-        let api_token: ApiToken = token_response.json().await?;
-        info!("Successfully acquired API token for user {}", user.username);
-        
+        // Step 6: Get an API token        
+        let api_token = match identity.role {
+            crate::Role::Admin => Some(self.vault.create_api_token_with_oidc(&identity, &keycloak_token).await?),
+            crate::Role::Captain => Some(self.vault.create_api_token_with_oidc(&identity, &keycloak_token).await?),
+            crate::Role::Advisor => None,
+            crate::Role::Student => None,
+            crate::Role::Spectator => None,
+        };
+
         Ok(AuthSession {
             identity,
-            api_token: Some(api_token),
+            api_token,
             client: http_client,
-            //token: Some(keycloak_token),
+            token: Some(keycloak_token),
         })
     }
     
@@ -294,57 +280,38 @@ impl AuthTestUtils {
     }
 }
 
-/// Programmatic API client for the test application that uses API tokens
-pub struct TestApiClient {
-    client: Client,
-    base_url: String,
-    auth_token: Option<String>,
+#[derive(Debug, Clone, Deserialize)]
+struct Claims {
+    sub: Uuid,
 }
 
-impl TestApiClient {
-    /// Create a new TestApiClient
-    pub fn new(base_url: &str) -> Self {
-        Self {
-            client: Client::new(),
-            base_url: base_url.to_string(),
-            auth_token: None,
-        }
+fn decode_token_claims(id_token_str: &str) -> Result<Uuid, anyhow::Error> {
+    // Split the token into parts
+    let parts: Vec<&str> = id_token_str.split('.').collect();
+    if parts.len() != 3 {
+        return Err(anyhow::anyhow!("Invalid JWT format"));
     }
     
-    /// Set the authentication token
-    pub fn with_token(mut self, token: &str) -> Self {
-        self.auth_token = Some(token.to_string());
-        self
-    }
+    // Decode the base64
+    let claims: Claims = match base64_decode(parts[1]) {
+        Ok(p) => serde_json::from_str(&p).unwrap(),
+        Err(_) => anyhow::bail!("Failed to decode payload")
+    };
+
+    Ok(claims.sub)
+}
+
+fn base64_decode(input: &str) -> Result<String, String> {
+    let padded = match input.len() % 4 {
+        0 => input.to_string(),
+        2 => format!("{}==", input),
+        3 => format!("{}=", input),
+        _ => input.to_string(),
+    };
     
-    /// Make a request with optional authentication
-    pub async fn request(
-        &self,
-        method: reqwest::Method,
-        path: &str,
-        body: Option<impl Serialize>,
-    ) -> reqwest::Result<reqwest::Response> {
-        let url = format!("{}{}", self.base_url, path);
-        let mut req = self.client.request(method, &url);
-        
-        if let Some(token) = &self.auth_token {
-            req = req.header(AUTHORIZATION, format!("Bearer {}", token));
-        }
-        
-        if let Some(json_body) = body {
-            req = req.json(&json_body);
-        }
-        
-        req.send().await
-    }
+    let decoded = URL_SAFE.decode(&padded)
+        .map_err(|e| format!("Base64 decode error: {}", e))?;
     
-    /// Perform a GET request
-    pub async fn get(&self, path: &str) -> reqwest::Result<reqwest::Response> {
-        self.request(reqwest::Method::GET, path, None::<()>).await
-    }
-    
-    /// Perform a POST request with JSON body
-    pub async fn post<T: Serialize>(&self, path: &str, body: T) -> reqwest::Result<reqwest::Response> {
-        self.request(reqwest::Method::POST, path, Some(body)).await
-    }
+    String::from_utf8(decoded)
+        .map_err(|e| format!("UTF-8 decode error: {}", e))
 }

@@ -145,6 +145,8 @@ impl AiclIdentifier {
             client_id: idp_config.client_id,
             client_secret: idp_config.client_secret,
             realm: idp_config.realm.unwrap(),
+            idp: self.idp.clone(),
+            vault: self.vault.clone(),
         }
     }
 

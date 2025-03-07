@@ -3,6 +3,7 @@ mod harness;
 use aicl_oidc::{test_utils::TestUser, AiclIdentifier};
 use harness::initialize_test_service;
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_authenticate_captain() {
     let (app_url, _guard) = initialize_test_service().await;
@@ -37,6 +38,7 @@ async fn test_authenticate_captain() {
         "API request should succeed, got: {}", response.status());
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_authenticate_student() {
     let (_, _guard) = initialize_test_service().await;
@@ -61,9 +63,10 @@ async fn test_authenticate_student() {
     assert_eq!(session.identity.team.as_ref().unwrap().name, "Team1");
     
     // Verify we have an API token
-    assert!(session.api_token.is_some());
+    assert!(session.api_token.is_none());
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_authenticate_advisor() {
     let (_, _guard) = initialize_test_service().await;
@@ -88,9 +91,10 @@ async fn test_authenticate_advisor() {
     assert_eq!(session.identity.institution.as_ref().unwrap().name, "School1");
     
     // Verify we have an API token
-    assert!(session.api_token.is_some());
+    assert!(session.api_token.is_none());
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_authenticate_admin() {
     let (_, _guard) = initialize_test_service().await;
@@ -116,6 +120,7 @@ async fn test_authenticate_admin() {
     assert!(session.api_token.is_some());
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_get_api_token_direct() {
     let (_, _guard) = initialize_test_service().await;
@@ -133,6 +138,7 @@ async fn test_get_api_token_direct() {
     assert!(!api_token.policies.is_empty());
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_authenticate_multiple_users() {
     let (_, _guard) = initialize_test_service().await;

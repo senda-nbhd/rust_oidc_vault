@@ -1,5 +1,5 @@
 mod harness;
-use aicl_oidc::{test_utils::{TestApiClient, TestUser}, AiclIdentifier};
+use aicl_oidc::{test_utils::TestUser, AiclIdentifier};
 use harness::initialize_test_service;
 
 #[tokio::test]
@@ -79,39 +79,6 @@ async fn test_team_expectation_mismatch() {
         result.unwrap_err().to_string().contains("Team mismatch"),
         "Error should indicate team mismatch"
     );
-}
-
-#[tokio::test]
-async fn test_expired_token() {
-    let (app_url, _guard) = initialize_test_service().await;
-    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
-    let auth_utils = aicl_identifier.test_utils().await;
-    
-    // Get an API token
-    let api_token = auth_utils.get_api_token_direct("captain1", "captain")
-        .await
-        .expect("Failed to get API token");
-    
-    // Create an expired token by setting the expiration to a past time
-    let expired_token = api_token.client_token.clone();
-    
-    // Create a client with the expired token
-    let api_client = TestApiClient::new(&app_url)
-        .with_token(&expired_token);
-    
-    // Try to access a protected endpoint
-    // Note: This test may be unreliable as it depends on token validation timing
-    // In a real test, you might mock the token validation to simulate expiration
-    let response = api_client.get("/api/protected").await;
-    
-    // The request might succeed if the token wasn't actually expired yet
-    if let Ok(resp) = response {
-        if !resp.status().is_success() {
-            println!("Token rejection confirmed: {}", resp.status());
-        }
-    } else if let Err(err) = response {
-        println!("Request failed with expired token: {}", err);
-    }
 }
 
 #[tokio::test]
