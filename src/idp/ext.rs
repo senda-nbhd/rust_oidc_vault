@@ -28,9 +28,11 @@ pub struct IdpGroup {
 
 /// A generic group representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct IdpGroupHeader {
     pub id: Uuid,
     pub name: String,
+    pub parent_id: Option<Uuid>,
 }
 
 /// A generic role representation
@@ -83,7 +85,7 @@ pub trait IdentityProvider: Send + Sync {
     async fn find_users_by_username(&self, username: &str) -> Result<Vec<IdpUser>, IdpError>;
 
     /// Get all groups from the identity provider
-    async fn get_groups(&self) -> Result<Vec<IdpGroupHeader>, IdpError>;
+    async fn get_groups(&self, parent: Option<Uuid>) -> Result<Vec<IdpGroupHeader>, IdpError>;
 
     /// Get a specific group by ID
     async fn get_group(&self, group_id: Uuid) -> Result<IdpGroup, IdpError>;

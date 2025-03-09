@@ -1,5 +1,5 @@
 use super::{admin::IdpAdmin, ext::IdpConfig};
-use crate::Role;
+use crate::{database::institutions, Role};
 use std::env;
 
 // Helper function to create a realistic test config based on Terraform setup
@@ -75,6 +75,32 @@ async fn test_team1_member_retrieval() {
     let members = member1_result.unwrap();
     assert_eq!(members.len(), 1);
     assert_eq!(members[0].username, "member1");
+}
+
+// Test teams retrieval
+#[tracing_test::traced_test]
+#[tokio::test]
+async fn test_get_teams() {
+    let admin = IdpAdmin::new(create_keycloak_config())
+        .await
+        .expect("Failed to create IdpAdmin");
+    let teams = admin.get_teams().await;
+    assert!(teams.is_ok(), "Failed to retrieve teams");
+    let teams = teams.unwrap();
+    assert_eq!(teams.len(), 3);
+}
+
+// Test role assignment for different user types
+#[tracing_test::traced_test]
+#[tokio::test]
+async fn test_get_institutions() {
+    let admin = IdpAdmin::new(create_keycloak_config())
+        .await
+        .expect("Failed to create IdpAdmin");
+    let institutions = admin.get_institutions().await;
+    assert!(institutions.is_ok(), "Failed to retrieve institutions");
+    let institutions = institutions.unwrap();
+    assert_eq!(institutions.len(), 2);
 }
 
 // Test role assignment for different user types
@@ -336,7 +362,7 @@ async fn test_cache_invalidation() {
 
     // Load groups into cache
     let _ = admin.get_user_groups(advisor.id).await.unwrap();
-    let _ = admin.get_groups().await.unwrap();
+    let _ = admin.get_groups(None).await.unwrap();
 
     // Now invalidate specific user cache
     admin.invalidate_user_cache(advisor.id).await;
@@ -353,6 +379,6 @@ async fn test_cache_invalidation() {
 
     // Verify everything reloads correctly
     let _ = admin.get_users().await.unwrap();
-    let _ = admin.get_groups().await.unwrap();
+    let _ = admin.get_groups(None).await.unwrap();
     let _ = admin.get_comprehensive_report().await.unwrap();
 }

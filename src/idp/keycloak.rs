@@ -386,10 +386,13 @@ impl IdentityProvider for KeycloakProvider {
         Ok(users)
     }
 
-    async fn get_groups(&self) -> Result<Vec<IdpGroupHeader>, IdpError> {
+    async fn get_groups(&self, parent: Option<Uuid>) -> Result<Vec<IdpGroupHeader>, IdpError> {
         let headers = self.get_auth_headers()?;
-        let url = format!("{}/admin/realms/{}/groups", self.base_url, self.realm);
-
+        let url = if let Some(parent) = parent {
+            format!("{}/admin/realms/{}/groups/{}/children", self.base_url, self.realm, parent)
+        } else {
+            format!("{}/admin/realms/{}/groups", self.base_url, self.realm)
+        };        
         debug!("Fetching groups from: {}", url);
         let response = match self.client.get(&url).headers(headers).send().await {
             Ok(resp) => resp,
@@ -423,7 +426,7 @@ impl IdentityProvider for KeycloakProvider {
             }
         };
 
-        info!("Successfully retrieved groups from Keycloak");
+        debug!(?groups, "Successfully retrieved groups from Keycloak");
         Ok(groups)
     }
 

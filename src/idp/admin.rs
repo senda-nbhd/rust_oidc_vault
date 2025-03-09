@@ -27,7 +27,7 @@ pub struct IdpAdmin {
     // Cache for users by email
     users_by_email: Cache<Arc<str>, Result<Vec<IdpUser>, IdpError>>,
     // Cache for group by ID
-    all_groups: Cache<(), Vec<IdpGroupHeader>>,
+    all_groups: Cache<Option<Uuid>, Vec<IdpGroupHeader>>,
     group_by_id: Cache<Uuid, Result<IdpGroup, IdpError>>,
     // Cache for group members
     group_members: Cache<Uuid, Result<Vec<IdpUser>, IdpError>>,
@@ -52,7 +52,7 @@ impl IdpAdmin {
         };
 
         provider.initialize().await?;
-        let groups = provider.get_groups().await?;
+        let groups = provider.get_groups(None).await?;
         let teams_group_id = groups.iter().find(|g| g.name == "Teams").map(|g| g.id);
         if teams_group_id.is_none() {
             return Err(IdpError::InvalidInput("Teams group not found".to_string()));
@@ -156,13 +156,21 @@ impl IdpAdmin {
     }
 
     /// Get all groups with caching
-    pub async fn get_groups(self: &Arc<Self>) -> Result<Vec<IdpGroupHeader>, Arc<IdpError>> {
+    pub async fn get_groups(self: &Arc<Self>, parent: Option<Uuid>) -> Result<Vec<IdpGroupHeader>, Arc<IdpError>> {
         let this = self.clone();
         self.all_groups
-            .entry(())
-            .or_try_insert_with(async move { this.provider.get_groups().await })
+            .entry(parent)
+            .or_try_insert_with(async move { this.provider.get_groups(parent).await })
             .await
             .map(|entry| entry.into_value())
+    }
+
+    pub async fn get_teams(self: &Arc<Self>) -> Result<Vec<IdpGroupHeader>, Arc<IdpError>> {
+        self.get_groups(Some(self.teams_group_id)).await
+    }
+
+    pub async fn get_institutions(self: &Arc<Self>) -> Result<Vec<IdpGroupHeader>, Arc<IdpError>> {
+        self.get_groups(Some(self.institutions_group_id)).await
     }
 
     /// Get a specific group by ID with caching
