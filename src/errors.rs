@@ -5,7 +5,11 @@ use axum::{
 use std::fmt;
 use thiserror::Error;
 
-use crate::{idp::ext::IdpError, oidc::ext::OidcError, vault::{VaultError, VerificationError}};
+use crate::{
+    idp::ext::IdpError,
+    oidc::ext::OidcError,
+    vault::{VaultError, VerificationError},
+};
 
 // Existing identifier error
 #[derive(Debug, Error)]

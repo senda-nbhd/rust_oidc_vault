@@ -1,10 +1,10 @@
-mod harness;
-use aicl_oidc::{test_utils::TestUser, AiclIdentifier};
-use harness::initialize_test_service;
+use axum_test::TestServer;
 
+use crate::{test_utils::TestUser, AiclIdentifier};
+
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_invalid_credentials() {
-    let (_, _guard) = initialize_test_service().await;
     let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     
@@ -31,9 +31,9 @@ async fn test_invalid_credentials() {
     );
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_role_expectation_mismatch() {
-    let (_, _guard) = initialize_test_service().await;
     let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     
@@ -56,9 +56,9 @@ async fn test_role_expectation_mismatch() {
     );
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_team_expectation_mismatch() {
-    let (_, _guard) = initialize_test_service().await;
     let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     
@@ -81,9 +81,9 @@ async fn test_team_expectation_mismatch() {
     );
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_token_revocation() {
-    let (app_url, _guard) = initialize_test_service().await;
     let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     
@@ -92,18 +92,29 @@ async fn test_token_revocation() {
         .await
         .expect("Failed to authenticate");
     
+    let router = super::router(aicl_identifier).await;
+    let server = TestServer::new(router).unwrap();
+
     // Use the token to access a protected endpoint
-    let response = session.get(&format!("{}/api/protected", app_url))
-        .await
-        .expect("Request failed");
+    let response = server.get("/api/protected")
+        .add_header(
+            "Authorization",
+            format!("Bearer {}", session.api_token.clone().unwrap().client_token),
+        )
+        .await;
     
-    assert!(response.status().is_success(), "Initial request should succeed");
+    assert!(response.status_code().is_success(), "Initial request should succeed");
     
     // In a real test, you would revoke the token here
     // This would typically call a function like:
     auth_utils.revoke_token(&session.api_token.clone().unwrap().client_token).await.expect("Token revocation failed");
     
     // Then try to use the revoked token (would fail in a real implementation)
-    let response = session.get(&format!("{}/api/protected", app_url)).await.expect("Request failed");
-    assert!(!response.status().is_success(), "Request with revoked token should fail");
+    let response = server.get("/api/protected")
+    .add_header(
+        "Authorization",
+        format!("Bearer {}", session.api_token.clone().unwrap().client_token),
+    )
+    .await;
+    assert!(!response.status_code().is_success(), "Request with revoked token should fail");
 }

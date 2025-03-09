@@ -2,8 +2,8 @@
 # This creates policies for team members to access their secrets
 
 # Create a read-only policy for team members/spectators
-resource "vault_policy" "team_read_policy" {
-  name = "team-${var.team_name}-read"
+resource "vault_policy" "team_member_policy" {
+  name = "team-${var.team_name}-member"
 
   policy = <<EOT
 # Allow reading team secrets
@@ -16,13 +16,13 @@ path "secret/metadata/teams/${var.team_name}/*" {
   capabilities = ["read", "list"]
 }
 
-path "auth/token/create/team-${var.team_name}" {
-  capabilities = ["read", "list"]
+path "auth/token/create/team-${var.team_name}-member" {
+  capabilities = ["create", "read", "update"]
 }
 
 # Allow creating child tokens with reduced privileges
-path "auth/token/create/team-${var.team_name}" {
-  capabilities = ["read", "list"]
+path "auth/token/create/team-${var.team_name}-member" {
+  capabilities = ["create", "read", "update"]
 }
 EOT
 }
@@ -63,7 +63,7 @@ resource "vault_jwt_auth_backend_role" "team_member_role" {
   role_type      = "jwt"
   token_ttl      = 3600  # 1 hour
   token_max_ttl  = 86400 # 24 hours
-  token_policies = [vault_policy.team_read_policy.name]
+  token_policies = [vault_policy.team_member_policy.name]
   
   bound_audiences = [var.client_id]
   user_claim      = "sub"
@@ -115,7 +115,7 @@ resource "vault_token_auth_backend_role" "team_captain_token_role" {
 
 resource "vault_token_auth_backend_role" "team_member_token_role" {
   role_name        = "team-${var.team_name}-member"
-  allowed_policies = [vault_policy.team_read_policy.name]
+  allowed_policies = [vault_policy.team_member_policy.name]
   orphan           = true
   renewable        = true
   token_period     = 86400  # 24 hours

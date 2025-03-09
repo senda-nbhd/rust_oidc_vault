@@ -3,9 +3,13 @@ pub mod errors;
 pub mod idp;
 pub mod oidc;
 pub mod vault;
+pub mod database;
 
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
+
+#[cfg(test)]
+mod tests;
 
 use std::sync::Arc;
 
@@ -140,7 +144,6 @@ impl AiclIdentifier {
             .await
             .expect("Failed to get IDP config from Vault");
         AuthTestUtils {
-            app_url: "http://localhost:4040".to_string(), 
             keycloak_url: "http://keycloak:8080".to_string(),
             client_id: idp_config.client_id,
             client_secret: idp_config.client_secret,

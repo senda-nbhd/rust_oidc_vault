@@ -1,3 +1,5 @@
+// Todo: Remove the admin client from this file. It's not needed here.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -66,8 +68,15 @@ pub struct VaultService {
 
 impl VaultService {
     pub async fn from_env() -> Result<Self, VaultError> {
+        #[cfg(not(feature = "test-utils"))]
         let address = std::env::var("VAULT_ADDR").ok().unwrap();
+        #[cfg(not(feature = "test-utils"))]
         let token = std::env::var("VAULT_TOKEN").ok().unwrap();
+        #[cfg(feature = "test-utils")]
+        let address = "http://localhost:8200".to_string();
+        #[cfg(feature = "test-utils")]
+        let token = "myroot".to_string();
+
         let config = VaultConfig {
             address,
             token,
@@ -161,7 +170,9 @@ impl VaultService {
         };
 
         // Create a Vault client authenticated as the user via OIDC
-        let user_client = self.create_user_vault_client(&id_token_str, vault_role.clone()).await?;
+        let user_client = self
+            .create_user_vault_client(&id_token_str, vault_role.clone())
+            .await?;
         tracing::debug!("User Vault client created");
         // Prepare token creation parameters using builder
         let mut builder = CreateRoleTokenRequestBuilder::default();
@@ -185,9 +196,10 @@ impl VaultService {
             (None, Role::Spectator) => Some("global-spectator".to_string()),
             _ => None,
         };
-        let token_result = vaultrs::token::new_role(&user_client, &token_role.unwrap(), Some(&mut builder))
-            .await
-            .map_err(|e| VaultError::TokenCreationError(e.to_string()))?;
+        let token_result =
+            vaultrs::token::new_role(&user_client, &token_role.unwrap(), Some(&mut builder))
+                .await
+                .map_err(|e| VaultError::TokenCreationError(e.to_string()))?;
         tracing::debug!("Token created successfully");
         // Calculate expiration time as Unix timestamp
         let now = Self::current_timestamp()?;

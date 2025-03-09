@@ -1,14 +1,18 @@
 use aicl_oidc::{
-    errors::JsonErrorHandler, oidc::keycloak::{KeyCloakToken, TOKEN_KEY}, vault::ApiToken, AiclIdentifier, AiclIdentity, AppErrorHandler, OptionalIdentity
+    errors::JsonErrorHandler,
+    oidc::keycloak::{KeyCloakToken, TOKEN_KEY},
+    vault::ApiToken,
+    AiclIdentifier, AiclIdentity, AppErrorHandler, OptionalIdentity,
 };
-use axum::{response::IntoResponse, routing::{get, post}, Json, Router};
+use axum::{response::IntoResponse, routing::get, Json, Router};
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use reqwest::StatusCode;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tower_sessions::{
-    cookie::{time::Duration, SameSite}, Expiry, MemoryStore, Session, SessionManagerLayer
+    cookie::{time::Duration, SameSite},
+    Expiry, MemoryStore, Session, SessionManagerLayer,
 };
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
@@ -20,22 +24,27 @@ pub async fn run(identifier: AiclIdentifier, error_handler: AppErrorHandler) {
         .with_same_site(SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(Duration::hours(1)));
 
-    let app: Router<()> = Router::new();
-
-    let app = app
-        .route("/foo", get(authenticated))
-        .route("/debug/token", get(debug_token_handler))
-        .route_service("/logout", identifier.logout_service())
-        .route("/token", get(create_token))
-        .route("/api/protected", get(token_authenticated))
-        .layer(identifier.login_layer())
-        .route("/bar", get(maybe_authenticated))
-        .layer(identifier.authenticate_layer())
-        .layer(session_layer)
-        .layer(identifier.api_token_layer())
-        .layer(identifier.identifier_layer())
-        .layer(error_handler.layer())
-        .layer(TraceLayer::new_for_http());
+    let app = Router::new()
+        .merge(
+            Router::new()
+                .route("/foo", get(authenticated))
+                .route("/debug/token", get(debug_token_handler))
+                .route_service("/logout", identifier.logout_service())
+                .route("/token", get(create_token))
+                .layer(identifier.login_layer())
+                .route("/bar", get(maybe_authenticated))
+                .layer(identifier.authenticate_layer())
+                .layer(session_layer)
+                .layer(identifier.identifier_layer())
+                .layer(error_handler.layer())
+                .layer(TraceLayer::new_for_http()),
+        )
+        .nest(
+            "/api",
+            Router::new()
+                .route("/protected", get(token_authenticated))
+                .layer(identifier.api_token_layer()),
+        );
 
     let listener = TcpListener::bind("0.0.0.0:4040").await.unwrap();
     tracing::info!("Router built, launcing");
@@ -101,10 +110,7 @@ async fn token_authenticated(identity: AiclIdentity) -> impl IntoResponse {
 }
 
 /// Handler that shows the full token with all claims for debugging purposes
-pub async fn debug_token_handler(
-    identity: AiclIdentity,
-    session: Session,
-) -> impl IntoResponse {
+pub async fn debug_token_handler(identity: AiclIdentity, session: Session) -> impl IntoResponse {
     // Get the OIDC token from the session
     let token_result = session.get::<KeyCloakToken>(TOKEN_KEY).await;
 
@@ -112,7 +118,7 @@ pub async fn debug_token_handler(
         Ok(Some(token)) => {
             // Get the token string
             let id_token_str = token.id_token.to_string();
-            
+
             // Parse JWT segments (without validation)
             let segments: Vec<&str> = id_token_str.split('.').collect();
             if segments.len() < 2 {
@@ -120,18 +126,18 @@ pub async fn debug_token_handler(
                     "error": "Invalid token format"
                 }));
             }
-            
+
             // Decode base64 for header and payload
             let header = match base64_decode(segments[0]) {
                 Ok(h) => parse_json(&h),
-                Err(_) => json!({"error": "Failed to decode header"})
+                Err(_) => json!({"error": "Failed to decode header"}),
             };
-            
+
             let payload = match base64_decode(segments[1]) {
                 Ok(p) => parse_json(&p),
-                Err(_) => json!({"error": "Failed to decode payload"})
+                Err(_) => json!({"error": "Failed to decode payload"}),
             };
-            
+
             // Return token information
             Json(json!({
                 "user": {
@@ -149,7 +155,7 @@ pub async fn debug_token_handler(
                     }
                 }
             }))
-        },
+        }
         Ok(None) => Json(json!({
             "error": "No token found in session",
             "user": {
@@ -161,7 +167,7 @@ pub async fn debug_token_handler(
         })),
         Err(e) => Json(json!({
             "error": format!("Session error: {}", e)
-        }))
+        })),
     }
 }
 
@@ -173,21 +179,18 @@ fn base64_decode(input: &str) -> Result<String, String> {
         3 => format!("{}=", input),
         _ => input.to_string(),
     };
-    
-    let decoded = URL_SAFE.decode(&padded)
+
+    let decoded = URL_SAFE
+        .decode(&padded)
         .map_err(|e| format!("Base64 decode error: {}", e))?;
-    
-    String::from_utf8(decoded)
-        .map_err(|e| format!("UTF-8 decode error: {}", e))
+
+    String::from_utf8(decoded).map_err(|e| format!("UTF-8 decode error: {}", e))
 }
 
 // Helper function to parse JSON
 fn parse_json(json_str: &str) -> Value {
-    serde_json::from_str(json_str).unwrap_or_else(|_| {
-        json!({"error": "Failed to parse JSON"})
-    })
+    serde_json::from_str(json_str).unwrap_or_else(|_| json!({"error": "Failed to parse JSON"}))
 }
-
 
 #[tokio::main]
 async fn main() {

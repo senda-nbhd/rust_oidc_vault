@@ -2,8 +2,8 @@
 # This creates policies for institution advisors to access their resources
 
 # Create a read-only policy for institution spectators
-resource "vault_policy" "institution_read_policy" {
-  name = "institution-${var.institution_name}-read"
+resource "vault_policy" "institution_spectator_policy" {
+  name = "institution-${var.institution_name}-spectator"
 
   policy = <<EOT
 # Allow reading institution shared secrets
@@ -19,6 +19,16 @@ path "secret/metadata/institutions/${var.institution_name}/*" {
 # Allow reading all institutions under this institution
 path "secret/data/institutions/byinstitution/${var.institution_name}/*" {
   capabilities = ["read", "list"]
+}
+
+# Allow spectators to create and manage institution tokens
+path "auth/token/create/institution-${var.institution_name}-spectator" {
+  capabilities = ["create", "read", "update"]
+}
+
+# Allow creating child tokens with reduced privileges
+path "auth/token/create/institution-${var.institution_name}-read" {
+  capabilities = ["create", "read", "update"]
 }
 EOT
 }
@@ -64,7 +74,7 @@ resource "vault_jwt_auth_backend_role" "institution_spectator_role" {
   role_type      = "jwt"
   token_ttl      = 3600  # 1 hour
   token_max_ttl  = 86400 # 24 hours
-  token_policies = [vault_policy.institution_read_policy.name]
+  token_policies = [vault_policy.institution_spectator_policy.name]
   
   bound_audiences = [var.client_id]
   user_claim      = "sub"
@@ -117,7 +127,7 @@ resource "vault_token_auth_backend_role" "institution_advisor_token_role" {
 
 resource "vault_token_auth_backend_role" "institution_spectator_token_role" {
   role_name        = "institution-${var.institution_name}-spectator"
-  allowed_policies = [vault_policy.institution_read_policy.name]
+  allowed_policies = [vault_policy.institution_spectator_policy.name]
   orphan           = true
   renewable        = true
   token_period     = 86400  # 24 hours

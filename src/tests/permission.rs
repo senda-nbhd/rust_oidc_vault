@@ -1,7 +1,7 @@
-mod harness;
-use aicl_oidc::{test_utils::{AuthSession, AuthTestUtils}, AiclIdentifier, Role};
+use axum_test::TestServer;
+
+use crate::{test_utils::{AuthSession, AuthTestUtils, AuthenticateTestRequest}, AiclIdentifier, Role};
 use std::collections::HashMap;
-use harness::initialize_test_service;
 
 // Helper function to authenticate all test users and return a map by role
 async fn authenticate_users_by_role(auth_utils: &AuthTestUtils) -> HashMap<Role, AuthSession> {
@@ -29,6 +29,7 @@ async fn authenticate_users_by_role(auth_utils: &AuthTestUtils) -> HashMap<Role,
 
 // Test endpoints with specific permissions for this example
 // In a real application, you would test actual endpoints
+#[derive(Debug, Clone)]
 enum TestEndpoint {
     PublicInfo,
     TeamView,
@@ -38,16 +39,14 @@ enum TestEndpoint {
 }
 
 impl TestEndpoint {
-    fn url(&self, app_url: &str) -> String {
-        let path = match self {
+    fn url(&self) -> &str {
+        match self {
             Self::PublicInfo => "/api/public",
             Self::TeamView => "/api/teams/view",
             Self::TeamEdit => "/api/teams/edit",
             Self::AdminOnly => "/api/admin",
             Self::AdvisorOnly => "/api/advisors",
-        };
-        
-        format!("{}{}", app_url, path)
+        }
     }
     
     fn allowed_roles(&self) -> Vec<Role> {
@@ -75,31 +74,35 @@ impl TestEndpoint {
 async fn test_endpoint_access(
     session: &AuthSession, 
     endpoint: &TestEndpoint,
-    app_url: &str,
+    server: &TestServer,
     expected_access: bool
 ) {
-    let url = endpoint.url(app_url);
-    let response = session.get(&url).await.expect("Request failed");
+    tracing::info!("Testing access");
+    let url = endpoint.url();
+    let response = server.get(&url).add_api_token(session).await;
     
-    let has_access = response.status().is_success();
-    
+    let has_access = response.status_code().is_success();
+    let text = response.text();
     assert_eq!(
         has_access, 
         expected_access,
-        "User {} with role {:?} {} access to {}, but access was {}",
+        "User {} with role {:?} {} access to {}, but access was {}, Text: {}",
         session.identity.username,
         session.identity.role,
         if expected_access { "should have" } else { "should NOT have" },
         url,
-        if has_access { "granted" } else { "denied" }
+        if has_access { "granted" } else { "denied" },
+        text,
     );
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_role_based_permissions() {
-    let (app_url, _guard) = initialize_test_service().await;
     let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
+    let router = super::router(aicl_identifier).await;
+    let server = TestServer::new(router).unwrap();
     
     // Get sessions for all roles
     let sessions_by_role = authenticate_users_by_role(&auth_utils).await;
@@ -123,18 +126,20 @@ async fn test_role_based_permissions() {
             test_endpoint_access(
                 session, 
                 endpoint, 
-                &app_url, 
+                &server, 
                 should_have_access
             ).await;
         }
     }
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_team_isolation() {
-    let (app_url, _guard) = initialize_test_service().await;
     let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
+    let router = super::router(aicl_identifier).await;
+    let server = TestServer::new(router).unwrap();
     
     // Authenticate captains from two different teams
     let captain1 = auth_utils.create_session_with_api_token("captain1", "captain")
@@ -146,43 +151,45 @@ async fn test_team_isolation() {
         .expect("Failed to authenticate captain2");
     
     // Test Team1 resources
-    let team1_url = format!("{}/api/teams/Team1/resources", app_url);
-    let team2_url = format!("{}/api/teams/Team2/resources", app_url);
+    let team1_url = "/api/teams/Team1/resources";
+    let team2_url = "/api/teams/Team2/resources";
     
     // Captain1 should have access to Team1 resources
-    let response = captain1.get(&team1_url).await.expect("Request failed");
+    let response = server.get(&team1_url).add_api_token(&captain1).await;
     assert!(
-        response.status().is_success(),
+        response.status_code().is_success(),
         "Captain1 should have access to Team1 resources"
     );
     
     // Captain1 should NOT have access to Team2 resources
-    let response = captain1.get(&team2_url).await.expect("Request failed");
+    let response = server.get(&team2_url).add_api_token(&captain1).await;
     assert!(
-        !response.status().is_success(),
+        !response.status_code().is_success(),
         "Captain1 should NOT have access to Team2 resources"
     );
     
     // Captain2 should have access to Team2 resources
-    let response = captain2.get(&team2_url).await.expect("Request failed");
+    let response = server.get(&team2_url).add_api_token(&captain2).await;
     assert!(
-        response.status().is_success(),
+        response.status_code().is_success(),
         "Captain2 should have access to Team2 resources"
     );
     
     // Captain2 should NOT have access to Team1 resources
-    let response = captain2.get(&team1_url).await.expect("Request failed");
+    let response = server.get(&team1_url).add_api_token(&captain2).await;
     assert!(
-        !response.status().is_success(),
+        !response.status_code().is_success(),
         "Captain2 should NOT have access to Team1 resources"
     );
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_institution_isolation() {
-    let (app_url, _guard) = initialize_test_service().await;
     let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
+    let router = super::router(aicl_identifier).await;
+    let server = TestServer::new(router).unwrap();
     
     // Authenticate advisors from different institutions
     let advisor1 = auth_utils.create_session_with_api_token("advisor1", "admin")
@@ -194,43 +201,45 @@ async fn test_institution_isolation() {
         .expect("Failed to authenticate advisor2");
     
     // Test institution resources
-    let school1_url = format!("{}/api/institutions/School1/resources", app_url);
-    let school2_url = format!("{}/api/institutions/School2/resources", app_url);
+    let school1_url = "/api/institutions/School1/resources";
+    let school2_url = "/api/institutions/School2/resources";
     
     // Advisor1 should have access to School1 resources
-    let response = advisor1.get(&school1_url).await.expect("Request failed");
+    let response = server.get(&school1_url).add_api_token(&advisor1).await;
     assert!(
-        response.status().is_success(),
+        response.status_code().is_success(),
         "Advisor1 should have access to School1 resources"
     );
     
     // Advisor1 should NOT have access to School2 resources
-    let response = advisor1.get(&school2_url).await.expect("Request failed");
+    let response = server.get(&school2_url).add_api_token(&advisor1).await;
     assert!(
-        !response.status().is_success(),
+        !response.status_code().is_success(),
         "Advisor1 should NOT have access to School2 resources"
     );
     
     // Advisor2 should have access to School2 resources
-    let response = advisor2.get(&school2_url).await.expect("Request failed");
+    let response = server.get(&school2_url).add_api_token(&advisor2).await;
     assert!(
-        response.status().is_success(),
+        response.status_code().is_success(),
         "Advisor2 should have access to School2 resources"
     );
     
     // Advisor2 should NOT have access to School1 resources
-    let response = advisor2.get(&school1_url).await.expect("Request failed");
+    let response = server.get(&school1_url).add_api_token(&advisor2).await;
     assert!(
-        !response.status().is_success(),
+        !response.status_code().is_success(),
         "Advisor2 should NOT have access to School1 resources"
     );
 }
 
+#[tracing_test::traced_test]
 #[tokio::test]
 async fn test_admin_override() {
-    let (app_url, _guard) = initialize_test_service().await;
     let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
+    let router = super::router(aicl_identifier).await;
+    let server = TestServer::new(router).unwrap();
     
     // Authenticate as admin
     let admin = auth_utils.create_session_with_api_token("admin", "admin")
@@ -239,16 +248,20 @@ async fn test_admin_override() {
     
     // Admin should have access to all team and institution resources
     let urls = [
-        format!("{}/api/teams/Team1/resources", app_url),
-        format!("{}/api/teams/Team2/resources", app_url),
-        format!("{}/api/institutions/School1/resources", app_url),
-        format!("{}/api/institutions/School2/resources", app_url),
+        "/api/teams/Team1/resources",
+        "/api/teams/Team2/resources",
+        "/api/institutions/School1/resources",
+        "/api/institutions/School2/resources",
     ];
     
     for url in &urls {
-        let response = admin.get(url).await.expect("Request failed");
+        let response = server.get(url).add_header(
+            "Authorization",
+            format!("Bearer {}", admin.api_token.clone().unwrap().client_token),
+        )
+        .await;
         assert!(
-            response.status().is_success(),
+            response.status_code().is_success(),
             "Admin should have access to {}", url
         );
     }

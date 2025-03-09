@@ -28,7 +28,7 @@ output "institution_group_id" {
 output "vault_policies" {
   description = "The Vault policies created for this institution"
   value = {
-    institution_read_policy    = vault_policy.institution_read_policy.name
+    institution_spectator_policy    = vault_policy.institution_spectator_policy.name
     institution_advisor_policy = vault_policy.institution_advisor_policy.name
   }
 }
