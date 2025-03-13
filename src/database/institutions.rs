@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
@@ -25,7 +27,7 @@ pub struct CompleteInstitution {
 impl IdpSyncService {
     /// Synchronize all institutions from Keycloak
     #[instrument(skip(self), level = "info")]
-    pub async fn sync_all_institutions(&self) -> anyhow::Result<Vec<CompleteInstitution>> {
+    pub async fn sync_all_institutions(&self) -> anyhow::Result<usize> {
         info!("Starting synchronization of all institutions from Keycloak");
         
         // Start a transaction
@@ -37,23 +39,25 @@ impl IdpSyncService {
             .context("Failed to get groups from Keycloak")?;
 
         info!(count = idp_institutions.len(), "Found institutions in Keycloak");
+        let mut count = 0;
         
         // Process each institution
-        let mut institutions = Vec::with_capacity(idp_institutions.len());
         for idp_institution in &idp_institutions {
             let idp_group = self.idp_admin.get_group(idp_institution.id).await
                 .context("Failed to get group by ID from Keycloak")?;
             if let Ok(institution) = self.sync_institution(&mut tx, &idp_group).await {
-                institutions.push(institution);
+                if self.update_institution_cache(institution).await {
+                    count += 1;
+                }
             }
         }
         
         // Commit the transaction
         tx.commit().await.context("Failed to commit transaction")?;
         
-        info!(synced = institutions.len(), "Successfully synchronized institutions");
+        info!("Successfully synchronized institutions");
         
-        Ok(institutions)
+        Ok(count)
     }
 
     #[instrument(skip(self, tx, idp_institution), fields(institution_id = %idp_institution.id, name = %idp_institution.name), level = "debug")]
@@ -143,7 +147,7 @@ impl IdpSyncService {
         .context("Failed to query if institution exists")?;
 
         // Institution record
-        let institution_id = match institution_exists {
+        match institution_exists {
             Some(record) => {
                 // Institution exists, but we don't update user-provided fields
                 debug!("Institution entry already exists: {}", idp_institution.name);
@@ -155,10 +159,11 @@ impl IdpSyncService {
                 
                 sqlx::query!(
                     r#"
-                    INSERT INTO institutions (entity_id)
-                    VALUES ($1)
+                    INSERT INTO institutions (id, entity_id)
+                    VALUES ($1, $2)
                     RETURNING id
                     "#,
+                    idp_institution.id,
                     entity_id
                 )
                 .fetch_one(&mut **tx)
@@ -187,7 +192,7 @@ impl IdpSyncService {
             WHERE 
                 i.id = $1
             "#,
-            institution_id
+            idp_institution.id
         )
         .fetch_one(&mut **tx)
         .await
@@ -209,11 +214,56 @@ impl IdpSyncService {
             updated_at: institution.updated_at,
         })
     }
+
+    /// Update cache selectively by comparing the new entity with the cached version
+    /// Returns true if the cache was updated, false if it was the same
+    async fn update_institution_cache(&self, institution: CompleteInstitution) -> bool {
+        let id = institution.id;
+        let existing = self.institutions.get(&id).await;
+        
+        // Convert institution to Arc for storage and comparison
+        let institution_arc = Arc::new(institution);
+        
+        match existing {
+            Some(cached) => {
+                // We need to compare the contents to see if they're different
+                if !are_institutions_equal(&cached, &institution_arc) {
+                    // Update cache if different
+                    self.institutions.insert(id, institution_arc).await;
+                    true
+                } else {
+                    // No change needed
+                    false
+                }
+            },
+            None => {
+                // No existing entry, always insert
+                self.institutions.insert(id, institution_arc).await;
+                true
+            }
+        }
+    }
+
+    pub async fn get_institution(&self, id: Uuid) -> Option<Arc<CompleteInstitution>> {
+        self.institutions.get(&id).await
+    }
+
+    pub async fn all_institutions(&self) -> Vec<Arc<CompleteInstitution>> {
+        self.institutions.iter().map(|(_, v)| v).collect()
+    }
+}
+
+fn are_institutions_equal(a: &Arc<CompleteInstitution>, b: &Arc<CompleteInstitution>) -> bool {
+    a.id == b.id &&
+    a.name == b.name &&
+    a.domain == b.domain &&
+    a.description == b.description &&
+    a.website_url == b.website_url &&
+    a.logo_url == b.logo_url
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::AiclIdentifier;
     use sqlx::PgPool;
     
@@ -221,20 +271,23 @@ mod tests {
     #[sqlx::test]
     async fn test_sync_institutions(pool: PgPool) -> anyhow::Result<()> {
         // Get the IdpAdmin from the environment
-        let identifier = AiclIdentifier::from_env().await?;
-        
-        // Create the sync service
-        let sync_service = IdpSyncService::new(pool, identifier.idp.clone());
+        let identifier = AiclIdentifier::from_env(pool).await?;
+        let sync_service = identifier.db.clone();
         
         // Run the team sync
-        let institutions = sync_service.sync_all_institutions().await?;
-        
+        let count = sync_service.sync_all_institutions().await?;
+        let institutions = sync_service.all_institutions().await;
+        assert_eq!(count, institutions.len());
+
         // Verify some data was synced
         assert!(!institutions.is_empty(), "No institutions were synced");
         
         // Check specific institutions
         let school1 = institutions.iter().find(|t| t.name == "School1");
         assert!(school1.is_some(), "School1 not found in sync results");
+
+        let count = sync_service.sync_all_institutions().await?;
+        assert_eq!(count, 0);
         
         Ok(())
     }

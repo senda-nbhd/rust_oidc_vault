@@ -20,12 +20,14 @@ pub use axum::{
     extractors::OptionalIdentity,
     middleware::{ApiTokenAuthLayer, AuthenticateLayer, LoginEnforcerLayer},
 };
+use database::IdpSyncService;
 use idp::admin::IdpAdmin;
 use oidc::{
     keycloak::{KeycloakOidcBuilder, KeycloakOidcProvider},
     logout::LogoutService,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use uuid::Uuid;
 use vault::VaultService;
 
@@ -98,10 +100,11 @@ pub struct AiclIdentifier {
     pub vault: Arc<VaultService>,
     pub oidc: Arc<KeycloakOidcProvider>,
     pub idp: Arc<IdpAdmin>,
+    pub db: Arc<IdpSyncService>,
 }
 
 impl AiclIdentifier {
-    pub async fn from_env() -> anyhow::Result<Self> {
+    pub async fn from_env(database: PgPool) -> anyhow::Result<Self> {
         let vault = Arc::new(
             VaultService::from_env()
                 .await
@@ -131,8 +134,9 @@ impl AiclIdentifier {
             .await
             .with_context(|| "Failed to build KeycloakOidcProvider")?,
         );
+        let db = Arc::new(IdpSyncService::new(database, idp.clone()));
 
-        Ok(Self { oidc, vault, idp })
+        Ok(Self { oidc, vault, idp, db })
     }
 
     #[cfg(feature = "test-utils")]

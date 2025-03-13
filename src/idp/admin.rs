@@ -1,3 +1,5 @@
+//! Todo: Remove the caching here.
+
 use atomic_time::AtomicInstant;
 use moka::future::{Cache, CacheBuilder};
 use std::{
@@ -14,7 +16,7 @@ use super::{
 };
 
 pub struct IdpAdmin {
-    config: IdpConfig,
+    _config: IdpConfig,
     provider: Box<dyn IdentityProvider>,
     teams_group_id: Uuid,
     institutions_group_id: Uuid,
@@ -92,7 +94,7 @@ impl IdpAdmin {
         let comprehensive_report = CacheBuilder::new(10).time_to_live(cache_ttl).build();
 
         Ok(Arc::new(IdpAdmin {
-            config,
+            _config: config,
             provider: Box::new(provider),
             teams_group_id,
             institutions_group_id,
@@ -222,11 +224,6 @@ impl IdpAdmin {
                 this.provider.get_user_roles(user_id).await
             })
             .await
-    }
-
-    /// Get a flattened list of all groups (including nested subgroups)
-    pub async fn flatten_groups(self: &Arc<Self>, groups: &[IdpGroup]) -> Vec<IdpGroup> {
-        self.provider.flatten_groups(groups)
     }
 
     /// Get a comprehensive report of all users with their groups and roles with caching

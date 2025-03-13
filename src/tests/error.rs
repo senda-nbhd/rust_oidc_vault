@@ -1,11 +1,12 @@
 use axum_test::TestServer;
+use sqlx::PgPool;
 
 use crate::{test_utils::TestUser, AiclIdentifier};
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_invalid_credentials() {
-    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+#[sqlx::test]
+async fn test_invalid_credentials(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool).await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     
     let invalid_user = TestUser {
@@ -32,9 +33,9 @@ async fn test_invalid_credentials() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_role_expectation_mismatch() {
-    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+#[sqlx::test]
+async fn test_role_expectation_mismatch(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool).await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     
     // User with incorrect role expectation
@@ -57,9 +58,9 @@ async fn test_role_expectation_mismatch() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_team_expectation_mismatch() {
-    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+#[sqlx::test]
+async fn test_team_expectation_mismatch(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool).await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     
     // User with incorrect team expectation
@@ -82,9 +83,9 @@ async fn test_team_expectation_mismatch() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_token_revocation() {
-    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+#[sqlx::test]
+async fn test_token_revocation(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool).await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     
     // Get a session

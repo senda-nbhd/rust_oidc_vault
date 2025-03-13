@@ -1,4 +1,5 @@
 use axum_test::TestServer;
+use sqlx::PgPool;
 
 use crate::{test_utils::{AuthSession, AuthTestUtils, AuthenticateTestRequest}, AiclIdentifier, Role};
 use std::collections::HashMap;
@@ -97,9 +98,9 @@ async fn test_endpoint_access(
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_role_based_permissions() {
-    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+#[sqlx::test]
+async fn test_role_based_permissions(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool).await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     let router = super::router(aicl_identifier).await;
     let server = TestServer::new(router).unwrap();
@@ -134,9 +135,9 @@ async fn test_role_based_permissions() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_team_isolation() {
-    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+#[sqlx::test]
+async fn test_team_isolation(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool).await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     let router = super::router(aicl_identifier).await;
     let server = TestServer::new(router).unwrap();
@@ -184,9 +185,9 @@ async fn test_team_isolation() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_institution_isolation() {
-    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+#[sqlx::test]
+async fn test_institution_isolation(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool).await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     let router = super::router(aicl_identifier).await;
     let server = TestServer::new(router).unwrap();
@@ -234,9 +235,9 @@ async fn test_institution_isolation() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_admin_override() {
-    let aicl_identifier = AiclIdentifier::from_env().await.expect("Failed to get AiclIdentifier from env");
+#[sqlx::test]
+async fn test_admin_override(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool).await.expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
     let router = super::router(aicl_identifier).await;
     let server = TestServer::new(router).unwrap();

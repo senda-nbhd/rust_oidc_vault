@@ -3,6 +3,7 @@ use axum::{response::IntoResponse, routing::get, Json, Router};
 use dotenvy::dotenv;
 use headless_chrome::Browser;
 use reqwest::{header::AUTHORIZATION, Client, StatusCode};
+use sqlx::postgres::PgPoolOptions;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tower_sessions::{cookie::{time::Duration, SameSite}, Expiry, MemoryStore, Session, SessionManagerLayer};
 pub const APP_URL: &str = "http://localhost:4040";
@@ -102,9 +103,13 @@ async fn token_authenticated(identity: AiclIdentity) -> impl IntoResponse {
 // Start the service and return its JoinHandle
 async fn start_service() -> JoinHandle<()> {
     dotenv().ok();
+    let database_url = std::env::var("DATABASE_URL").ok().unwrap();
+    let pool = PgPoolOptions::new()
+            .connect(&database_url)
+            .await.expect("Can't connect to the database");
 
     tracing::info!("Starting OIDC application for tests");
-    let identifier = AiclIdentifier::from_env()
+    let identifier = AiclIdentifier::from_env(pool)
         .await
         .expect("Failed to initialize AiclIdentifier");
 

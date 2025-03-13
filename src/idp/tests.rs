@@ -1,5 +1,5 @@
 use super::{admin::IdpAdmin, ext::IdpConfig};
-use crate::{database::institutions, Role};
+use crate::Role;
 use std::env;
 
 // Helper function to create a realistic test config based on Terraform setup

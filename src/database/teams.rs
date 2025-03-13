@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use sqlx::{Postgres, Transaction};
@@ -7,7 +9,7 @@ use uuid::Uuid;
 
 use crate::idp::ext::IdpGroup;
 
-use super::{institutions::CompleteInstitution, IdpSyncService};
+use super::IdpSyncService;
 
 /// Complete team entity with all related information
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,7 +19,7 @@ pub struct CompleteTeam {
     pub description: Option<String>,
     pub competition_year: Option<i32>,
     pub logo_url: Option<String>,
-    pub institution: Option<CompleteInstitution>,
+    pub institution_id: Option<Uuid>,
     pub created_at: Option<OffsetDateTime>,
     pub updated_at: Option<OffsetDateTime>,
 }
@@ -26,7 +28,7 @@ pub struct CompleteTeam {
 impl IdpSyncService {
     /// Synchronize all teams from Keycloak
     #[instrument(skip(self), level = "info")]
-    pub async fn sync_all_teams(&self) -> anyhow::Result<Vec<CompleteTeam>> {
+    pub async fn sync_all_teams(&self) -> anyhow::Result<usize> {
         info!("Starting synchronization of all teams from Keycloak");
         
         // Start a transaction
@@ -38,23 +40,24 @@ impl IdpSyncService {
             .context("Failed to get groups from Keycloak")?;
         
         info!(count = idp_teams.len(), "Found teams in Keycloak");
-        
+        let mut count = 0;
         // Process each team
-        let mut teams = Vec::with_capacity(idp_teams.len());
         for team_header in &idp_teams {
             let idp_group = self.idp_admin.get_group(team_header.id).await
                 .context("Failed to get group by ID from Keycloak")?;
             if let Ok(team) = self.sync_team(&mut tx, &idp_group).await {
-                teams.push(team);
+                if self.update_team_cache(team).await {
+                    count += 1;
+                }
             }
         }
         
         // Commit the transaction
         tx.commit().await.context("Failed to commit transaction")?;
         
-        info!(synced = teams.len(), "Successfully synchronized teams");
+        info!("Successfully synchronized teams");
         
-        Ok(teams)
+        Ok(count)
     }
 
     #[instrument(skip(self, tx, idp_team), fields(team_id = %idp_team.id, name = %idp_team.name), level = "debug")]
@@ -130,42 +133,6 @@ impl IdpSyncService {
             }
         };
 
-        // Determine the institution_id if the team belongs to an institution
-        // We need to find if team members belong to an institution
-        let members = self.idp_admin.get_group_members(idp_team.id).await
-            .context("Failed to get team members")?;
-        
-        let mut institution_id = None;
-
-        // For the first team member that has an institution, use that institution
-        if !members.is_empty() {
-            // Try to get the institution for the first member
-            for member in &members {
-                if let Ok(identity) = self.idp_admin.to_domain_user(member).await {
-                    if let Some(inst) = identity.institution {
-                        // Find the institution ID in the database
-                        let db_institution = sqlx::query!(
-                            r#"
-                            SELECT i.id 
-                            FROM institutions i
-                            JOIN idp_entities e ON i.entity_id = e.id
-                            WHERE e.id = $1
-                            "#,
-                            inst.id
-                        )
-                        .fetch_optional(&mut **tx)
-                        .await
-                        .context("Failed to query institution")?;
-                        
-                        if let Some(record) = db_institution {
-                            institution_id = Some(record.id);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
         // Check if team entry already exists
         let team_exists = sqlx::query!(
             r#"
@@ -184,23 +151,6 @@ impl IdpSyncService {
             Some(record) => {
                 // Team exists, update institution_id if needed
                 debug!("Team entry already exists: {}", idp_team.name);
-                
-                if record.institution_id != institution_id {
-                    debug!("Updating team's institution: {}", idp_team.name);
-                    sqlx::query!(
-                        r#"
-                        UPDATE teams 
-                        SET institution_id = $1
-                        WHERE id = $2
-                        "#,
-                        institution_id,
-                        record.id
-                    )
-                    .execute(&mut **tx)
-                    .await
-                    .context("Failed to update team's institution")?;
-                }
-                
                 record.id
             },
             None => {
@@ -209,12 +159,12 @@ impl IdpSyncService {
                 
                 sqlx::query!(
                     r#"
-                    INSERT INTO teams (entity_id, institution_id)
+                    INSERT INTO teams (id, entity_id)
                     VALUES ($1, $2)
                     RETURNING id
                     "#,
-                    entity_id,
-                    institution_id
+                    idp_team.id,
+                    entity_id
                 )
                 .fetch_one(&mut **tx)
                 .await
@@ -248,48 +198,6 @@ impl IdpSyncService {
         .await
         .context("Failed to fetch complete team data")?;
 
-        // If there's an institution, fetch its details
-        let institution = if let Some(inst_id) = team.institution_id {
-            let inst_data = sqlx::query!(
-                r#"
-                SELECT 
-                    i.id,
-                    e.name,
-                    i.domain,
-                    e.attributes->'description' as description,
-                    i.website_url,
-                    i.logo_url,
-                    i.created_at,
-                    i.updated_at
-                FROM 
-                    institutions i
-                JOIN
-                    idp_entities e ON i.entity_id = e.id
-                WHERE 
-                    i.id = $1
-                "#,
-                inst_id
-            )
-            .fetch_optional(&mut **tx)
-            .await
-            .context("Failed to fetch institution data")?;
-            
-            inst_data.map(|i| {
-                CompleteInstitution {
-                    id: i.id,
-                    name: i.name,
-                    domain: i.domain,
-                    description: i.description.and_then(|v| v.as_str().map(|s| s.to_string())),
-                    website_url: i.website_url,
-                    logo_url: i.logo_url,
-                    created_at: i.created_at,
-                    updated_at: i.updated_at,
-                }
-            })
-        } else {
-            None
-        };
-
         // Convert to the CompleteTeam struct
         let description = team
             .description
@@ -301,30 +209,73 @@ impl IdpSyncService {
             description,
             competition_year: team.competition_year,
             logo_url: team.logo_url,
-            institution,
+            institution_id: team.institution_id,
             created_at: team.created_at,
             updated_at: team.updated_at,
         })
     }
+
+    /// Update team cache selectively
+    async fn update_team_cache(&self, team: CompleteTeam) -> bool {
+        let id = team.id;
+        let existing = self.teams.get(&id).await;
+        
+        // Convert team to Arc for storage and comparison
+        let team_arc = Arc::new(team);
+        
+        match existing {
+            Some(cached) => {
+                // We need to compare the contents to see if they're different
+                if !are_teams_equal(&cached, &team_arc) {
+                    // Update cache if different
+                    self.teams.insert(id, team_arc).await;
+                    true
+                } else {
+                    // No change needed
+                    false
+                }
+            },
+            None => {
+                // No existing entry, always insert
+                self.teams.insert(id, team_arc).await;
+                true
+            }
+        }
+    }
+
+    pub async fn get_team(&self, id: Uuid) -> Option<Arc<CompleteTeam>> {
+        self.teams.get(&id).await
+    }
+
+    pub async fn all_teams(&self) -> Vec<Arc<CompleteTeam>> {
+        self.teams.iter().map(|(_, v)| v).collect()
+    }
+}
+
+fn are_teams_equal(a: &Arc<CompleteTeam>, b: &Arc<CompleteTeam>) -> bool {
+    a.id == b.id &&
+    a.name == b.name &&
+    a.description == b.description &&
+    a.competition_year == b.competition_year &&
+    a.logo_url == b.logo_url &&
+    a.institution_id == b.institution_id
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::AiclIdentifier;
     use sqlx::PgPool;
     
     #[sqlx::test]
     async fn test_sync_teams(pool: PgPool) -> anyhow::Result<()> {
         // Get the IdpAdmin from the environment
-        let identifier = AiclIdentifier::from_env().await?;
-        
-        // Create the sync service
-        let sync_service = IdpSyncService::new(pool, identifier.idp.clone());
+        let identifier = AiclIdentifier::from_env(pool).await?;
+        let sync_service = identifier.db.clone();
         
         // Run the team sync
-        let teams = sync_service.sync_all_teams().await?;
-        
+        let count = sync_service.sync_all_teams().await?;
+        let teams = sync_service.all_teams().await;
+        assert_eq!(count, teams.len());
         // Verify some data was synced
         assert!(!teams.is_empty(), "No teams were synced");
         
@@ -333,12 +284,10 @@ mod tests {
         assert!(team1.is_some(), "Team1 not found in sync results");
         
         if let Some(team1) = team1 {
-            assert!(team1.institution.is_some(), "Team1 should be associated with an institution");
-            if let Some(inst) = &team1.institution {
-                assert_eq!(inst.name, "School1", "Team1 should be associated with School1");
-            }
+            assert!(team1.institution_id.is_none(), "Team1 should be associated with an institution_id");
         }
-        
+        let count = sync_service.sync_all_teams().await?;
+        assert_eq!(count, 0);
         Ok(())
     }
 }

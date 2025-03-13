@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use thiserror::Error;
 use uuid::Uuid;
 
+use crate::{AiclIdentity, InstitutionIdentity, Role, TeamIdentity};
+
 /// A generic user representation that can be used across different identity providers
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdpUser {
@@ -99,8 +101,69 @@ pub trait IdentityProvider: Send + Sync {
     /// Get roles assigned to a user
     async fn get_user_roles(&self, user_id: Uuid) -> Result<Vec<IdpRole>, IdpError>;
 
-    /// Get a flattened list of all groups (including nested subgroups)
-    fn flatten_groups(&self, groups: &[IdpGroup]) -> Vec<IdpGroup>;
+    async fn to_domain_user(
+        &self,
+        user: &IdpUser,
+    ) -> Result<AiclIdentity, IdpError> {
+        // Extract team information from user's groups
+        let groups = self.get_user_groups(user.id).await?;
+        tracing::debug!("User {} is in groups {:?}", user.id, groups);
+        let team = groups.iter().find_map(|group| {
+            if group.path.starts_with("/Teams/") {
+                Some(TeamIdentity {
+                    id: group.id,
+                    name: group.name.clone(),
+                })
+            } else {
+                None
+            }
+        });
+        let institution = groups.iter().find_map(|group| {
+            if group.path.starts_with("/Institutions/") {
+                Some(InstitutionIdentity {
+                    id: group.id,
+                    name: group.name.clone(),
+                })
+            } else {
+                None
+            }
+        });
+        let roles = self.get_user_roles(user.id).await?;
+        tracing::debug!(user.username, "User has {} roles.", roles.len());
+        if roles.len() > 1 {
+            tracing::error!(
+                user.username,
+                "User has multiple roles, only the first one will be used."
+            );
+        }
+        if roles.len() == 0 {
+            tracing::error!(user.username, "User has no roles.");
+        }
+
+        let role = match roles.first().map(|r| Role::parse(&r.name)) {
+            Some(role) => role,
+            _ => Role::Spectator,
+        };
+
+        let username = user.username.clone();
+
+        Ok(AiclIdentity {
+            username,
+            team,
+            institution,
+            role,
+            email: user.email.clone(),
+            id: user.id,
+        })
+    }
+
+    async fn get_domain_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<AiclIdentity, IdpError> {
+        let user = self.get_user(user_id).await?;
+        self.to_domain_user(&user).await
+    }
 }
 
 /// Configuration for identity providers

@@ -1,11 +1,12 @@
 use axum_test::TestServer;
+use sqlx::PgPool;
 
 use crate::{test_utils::TestUser, AiclIdentifier};
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_authenticate_captain() {
-    let aicl_identifier = AiclIdentifier::from_env()
+#[sqlx::test]
+async fn test_authenticate_captain(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool)
         .await
         .expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
@@ -46,9 +47,9 @@ async fn test_authenticate_captain() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_authenticate_student() {
-    let aicl_identifier = AiclIdentifier::from_env()
+#[sqlx::test]
+async fn test_authenticate_student(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool)
         .await
         .expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
@@ -77,9 +78,9 @@ async fn test_authenticate_student() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_authenticate_advisor() {
-    let aicl_identifier = AiclIdentifier::from_env()
+#[sqlx::test]
+async fn test_authenticate_advisor(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool)
         .await
         .expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
@@ -111,9 +112,9 @@ async fn test_authenticate_advisor() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_authenticate_admin() {
-    let aicl_identifier = AiclIdentifier::from_env()
+#[sqlx::test]
+async fn test_authenticate_admin(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool)
         .await
         .expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
@@ -140,9 +141,9 @@ async fn test_authenticate_admin() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_get_api_token_direct() {
-    let aicl_identifier = AiclIdentifier::from_env()
+#[sqlx::test]
+async fn test_get_api_token_direct(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool)
         .await
         .expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;
@@ -160,9 +161,9 @@ async fn test_get_api_token_direct() {
 }
 
 #[tracing_test::traced_test]
-#[tokio::test]
-async fn test_authenticate_multiple_users() {
-    let aicl_identifier = AiclIdentifier::from_env()
+#[sqlx::test]
+async fn test_authenticate_multiple_users(pool: PgPool) {
+    let aicl_identifier = AiclIdentifier::from_env(pool)
         .await
         .expect("Failed to get AiclIdentifier from env");
     let auth_utils = aicl_identifier.test_utils().await;

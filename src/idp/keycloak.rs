@@ -705,25 +705,4 @@ impl IdentityProvider for KeycloakProvider {
 
         Ok(roles)
     }
-
-    fn flatten_groups(&self, groups: &[IdpGroup]) -> Vec<IdpGroup> {
-        let mut flat_groups = Vec::new();
-        let mut to_process = groups.to_vec();
-
-        while !to_process.is_empty() {
-            let current = to_process.remove(0);
-            flat_groups.push(current.clone());
-
-            // Find and queue up any subgroups (groups with this as parent)
-            let subgroups = groups
-                .iter()
-                .filter(|g| g.parent_id.as_ref() == Some(&current.id))
-                .cloned()
-                .collect::<Vec<IdpGroup>>();
-
-            to_process.extend(subgroups);
-        }
-
-        flat_groups
-    }
 }

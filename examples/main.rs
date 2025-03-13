@@ -8,6 +8,7 @@ use axum::{response::IntoResponse, routing::get, Json, Router};
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use reqwest::StatusCode;
 use serde_json::{json, Value};
+use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 use tower_sessions::{
@@ -204,10 +205,14 @@ async fn main() {
             "trace,hyper=off".into()
         }))
         .init();
+    let database_url = std::env::var("DATABASE_URL").ok().unwrap();
+    let pool = PgPoolOptions::new()
+            .connect(&database_url)
+            .await.expect("Can't connect to the database");
 
     // Log application startup
     tracing::info!("Starting OIDC application");
-    let identifier = AiclIdentifier::from_env()
+    let identifier = AiclIdentifier::from_env(pool)
         .await
         .expect("Failed to initialize AiclIdentifier");
     let error_handler = AppErrorHandler::new(JsonErrorHandler::default());
