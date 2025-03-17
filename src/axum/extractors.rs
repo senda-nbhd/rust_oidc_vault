@@ -3,7 +3,8 @@ use reqwest::StatusCode;
 
 use crate::{AiclIdentifier, AiclIdentity};
 
-//Comment here
+// This module defines extractors for AiclIdentity and AiclIdentifier from request parts,
+// enabling authentication and optional identity extraction in Axum handlers.
 
 impl<S> FromRequestParts<S> for AiclIdentity
 where
@@ -11,6 +12,8 @@ where
 {
     type Rejection = (StatusCode, String);
 
+    /// Extracts the AiclIdentity from the request parts.
+    /// Returns an error if the AiclIdentity is not found in the request extensions.
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
         parts
             .extensions
